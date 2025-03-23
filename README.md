@@ -1,25 +1,4 @@
 <div align="center">
-  <br />
-  <div style="background: linear-gradient(90deg, #171532 0%, #08090D 100%); padding: 30px; border-radius: 10px; max-width: 800px; margin: 0 auto;">
-    <h1 style="color: white; font-size: 2.5rem; margin-bottom: 0.5rem;">Real-time AI</h1>
-    <h1 style="color: #a29dff; font-size: 2.5rem; margin-top: 0; margin-bottom: 0.5rem;">Mock Interview</h1>
-    <h1 style="color: white; font-size: 2.5rem; margin-top: 0;">Prep Platform</h1>
-    <div style="margin-top: 30px; margin-bottom: 20px;">
-      <h2 style="color: white; font-size: 1.8rem;">PrepWise</h2>
-    </div>
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 30px;">
-      <div style="background: #1a1a2e; padding: 15px; border-radius: 8px; text-align: center;">
-        <span style="color: #a29dff; font-weight: bold;">Full-Stack Dev Interview</span>
-      </div>
-      <div style="background: #1a1a2e; padding: 15px; border-radius: 8px; text-align: center;">
-        <span style="color: #a29dff; font-weight: bold;">DevOps & Cloud Interview</span>
-      </div>
-      <div style="background: #1a1a2e; padding: 15px; border-radius: 8px; text-align: center;">
-        <span style="color: #a29dff; font-weight: bold;">Mobile Dev Interview</span>
-      </div>
-    </div>
-  </div>
-  <br />
   
   <div>
     <img src="https://img.shields.io/badge/-Next.JS-black?style=for-the-badge&logoColor=white&logo=nextdotjs&color=black" alt="next.js" />
@@ -31,7 +10,7 @@
   <h3 align="center">Prepwise: A job interview preparation platform powered by Vapi AI Voice agents</h3>
 
    <div align="center">
-     Build this project step by step with my detailed README.md on <a href="https://github.com/Troy2727/ai_mock_interview.git" target="_blank"><b>JavaScript Mastery</b></a> YouTube. Join the JSMestro family!
+     Build this project step by step with my detailed README.md on <a href="https://github.com/Troy2727/ai_mock_interview.git" target="_blank"><b>JavaScript Maestro</b></a> Repositories. Join the JSMestro family!
     </div>
 </div>
 

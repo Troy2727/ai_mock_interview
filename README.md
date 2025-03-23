@@ -1,20 +1,15 @@
+# Prepwise: Job Interview Platform with Vapi AI Voice Agents
+
+[![Next.js](https://img.shields.io/badge/Next.js-000?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
+[![Vapi](https://img.shields.io/badge/Vapi-5DFECA?style=for-the-badge)](https://vapi.ai/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss)](https://tailwindcss.com/)
+[![Firebase](https://img.shields.io/badge/Firebase-DD2C00?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
+
 <div align="center">
-  
-  <div>
-    <img src="https://img.shields.io/badge/-Next.JS-black?style=for-the-badge&logoColor=white&logo=nextdotjs&color=black" alt="next.js" />
-    <img src="https://img.shields.io/badge/-Vapi-white?style=for-the-badge&color=5dfeca" alt="vapi" />
-    <img src="https://img.shields.io/badge/-Tailwind_CSS-black?style=for-the-badge&logoColor=white&logo=tailwindcss&color=06B6D4" alt="tailwindcss" />
-    <img src="https://img.shields.io/badge/-Firebase-black?style=for-the-badge&logoColor=white&logo=firebase&color=DD2C00" alt="firebase" />
-  </div>
-
-  <h3 align="center">Prepwise: A job interview preparation platform powered by Vapi AI Voice agents</h3>
-
-   <div align="center">
-     Build this project step by step with my detailed README.md on <a href="https://github.com/Troy2727/ai_mock_interview.git" target="_blank"><b>JavaScript Maestro</b></a> Repositories. Join the JSMestro family!
-    </div>
+  Build this project step-by-step with my detailed tutorial on <a href="https://github.com/Troy2727/ai_mock_interview.git" target="_blank"><b>JavaScript Maestro</b></a> Repositories. Join the JSMestro family!
 </div>
 
-## 📋 <a name="table">Table of Contents</a>
+## 📋 Table of Contents
 
 1. 🤖 [Introduction](#introduction)
 2. ⚙️ [Tech Stack](#tech-stack)

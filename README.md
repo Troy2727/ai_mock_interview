@@ -1,8 +1,24 @@
 <div align="center">
   <br />
-    <a href="https://www.youtube.com/watch?v=8GK8R77Bd7g" target="_blank">
-      <img src="https://github.com/user-attachments/assets/1c0131c7-9f2d-4e3b-b47c-9679e76d8f9a" alt="Project Banner">
-    </a>
+  <div style="background: linear-gradient(90deg, #171532 0%, #08090D 100%); padding: 30px; border-radius: 10px; max-width: 800px; margin: 0 auto;">
+    <h1 style="color: white; font-size: 2.5rem; margin-bottom: 0.5rem;">Real-time AI</h1>
+    <h1 style="color: #a29dff; font-size: 2.5rem; margin-top: 0; margin-bottom: 0.5rem;">Mock Interview</h1>
+    <h1 style="color: white; font-size: 2.5rem; margin-top: 0;">Prep Platform</h1>
+    <div style="margin-top: 30px; margin-bottom: 20px;">
+      <h2 style="color: white; font-size: 1.8rem;">PrepWise</h2>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 30px;">
+      <div style="background: #1a1a2e; padding: 15px; border-radius: 8px; text-align: center;">
+        <span style="color: #a29dff; font-weight: bold;">Full-Stack Dev Interview</span>
+      </div>
+      <div style="background: #1a1a2e; padding: 15px; border-radius: 8px; text-align: center;">
+        <span style="color: #a29dff; font-weight: bold;">DevOps & Cloud Interview</span>
+      </div>
+      <div style="background: #1a1a2e; padding: 15px; border-radius: 8px; text-align: center;">
+        <span style="color: #a29dff; font-weight: bold;">Mobile Dev Interview</span>
+      </div>
+    </div>
+  </div>
   <br />
   
   <div>
@@ -15,7 +31,7 @@
   <h3 align="center">Prepwise: A job interview preparation platform powered by Vapi AI Voice agents</h3>
 
    <div align="center">
-     Build this project step by step with our detailed tutorial on <a href="https://www.youtube.com/@javascriptmastery/videos" target="_blank"><b>JavaScript Mastery</b></a> YouTube. Join the JSM family!
+     Build this project step by step with my detailed README.md on <a href="https://github.com/Troy2727/ai_mock_interview.git" target="_blank"><b>JavaScript Mastery</b></a> YouTube. Join the JSMestro family!
     </div>
 </div>
 
@@ -31,19 +47,15 @@
 
 ## 🚨 Tutorial
 
-This repository contains the code corresponding to an in-depth tutorial available on our YouTube channel, <a href="https://www.youtube.com/@javascriptmastery/videos" target="_blank"><b>JavaScript Mastery</b></a>.
+This repository contains the code corresponding to an in-depth tutorial available on my https://github.com/Troy2727/ai_mock_interview.git, JavaScript Maestro.
 
 If you prefer visual learning, this is the perfect resource for you. Follow our tutorial to learn how to build projects like these step-by-step in a beginner-friendly manner!
-
-<a href="https://www.youtube.com/watch?v=8GK8R77Bd7g" target="_blank"><img src="https://github.com/sujatagunale/EasyRead/assets/151519281/1736fca5-a031-4854-8c09-bc110e3bc16d" /></a>
 
 ## <a name="introduction">🤖 Introduction</a>
 
 Built with Next.js for the user interface and backend logic, Firebase for authentication and data storage, styled with TailwindCSS and using Vapi's voice agents, Prepwise is a website project designed to help you learn integrating AI models with your apps. The platform offers a sleek and modern experience for job interview preparation.
 
-If you're getting started and need assistance or face any bugs, join our active Discord community with over **50k+** members. It's a place where people help each other out.
 
-<a href="https://discord.com/invite/n6EdbFJ" target="_blank"><img src="https://github.com/sujatagunale/EasyRead/assets/151519281/618f4872-1e10-42da-8213-1d69e486d02e" /></a>
 
 ## <a name="tech-stack">⚙️ Tech Stack</a>
 
@@ -668,24 +680,3 @@ system:
         </Button>
       </div>
     </section>
-```
-
-</details>
-
-
-## <a name="links">🔗 Assets</a>
-
-Public assets used in the project can be found [here](https://drive.google.com/file/d/1nW_4KcVWxM_CWJKTCQf2Wprtmz2WlyFW/view?usp=sharing)
-
-## <a name="more">🚀 More</a>
-
-**Advance your skills with Next.js Pro Course**
-
-Enjoyed creating this project? Dive deeper into our PRO courses for a richer learning adventure. They're packed with
-detailed explanations, cool features, and exercises to boost your skills. Give it a go!
-
-<a href="https://jsmastery.pro/next15" target="_blank">
-   <img src="https://github.com/user-attachments/assets/b8760e69-1f81-4a71-9108-ceeb1de36741" alt="Project Banner">
-</a>
-#   a i _ m o c k _ i n t e r v i e w  
- 

@@ -95,31 +95,62 @@ export async function getLatestInterviews(
 ): Promise<Interview[] | null> {
   const { userId, limit = 20 } = params;
 
-  const interviews = await db
-    .collection("interviews")
-    .orderBy("createdAt", "desc")
-    .where("finalized", "==", true)
-    .where("userId", "!=", userId)
-    .limit(limit)
-    .get();
+  try {
+    // Simple query with only one ordering field and no inequality filters
+    const interviews = await db
+      .collection("interviews")
+      .where("finalized", "==", true)
+      .get();
 
-  return interviews.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Interview[];
+    // Filter and sort in memory
+    const filteredInterviews = interviews.docs
+      .filter(doc => doc.data().userId !== userId)
+      .sort((a, b) => {
+        const dateA = new Date(a.data().createdAt || 0);
+        const dateB = new Date(b.data().createdAt || 0);
+        return dateB.getTime() - dateA.getTime(); // descending order
+      })
+      .slice(0, limit);
+
+    return filteredInterviews.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Interview[];
+  } catch (error) {
+    console.error("Error fetching latest interviews:", error);
+    return [];
+  }
 }
 
 export async function getInterviewsByUserId(
-  userId: string
+  userId: string | undefined
 ): Promise<Interview[] | null> {
-  const interviews = await db
-    .collection("interviews")
-    .where("userId", "==", userId)
-    .orderBy("createdAt", "desc")
-    .get();
+  // If userId is undefined, return an empty array
+  if (!userId) {
+    return [];
+  }
 
-  return interviews.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as Interview[];
+  try {
+    // Simple query with only equality filters and no ordering
+    const interviews = await db
+      .collection("interviews")
+      .where("userId", "==", userId)
+      .get();
+
+    // Sort in memory
+    const sortedInterviews = interviews.docs
+      .sort((a, b) => {
+        const dateA = new Date(a.data().createdAt || 0);
+        const dateB = new Date(b.data().createdAt || 0);
+        return dateB.getTime() - dateA.getTime(); // descending order
+      });
+
+    return sortedInterviews.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    })) as Interview[];
+  } catch (error) {
+    console.error("Error fetching interviews by user ID:", error);
+    return [];
+  }
 }

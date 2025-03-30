@@ -120,78 +120,44 @@ const AuthForm = ({ type }: { type: FormType }) => {
             return;
           }
 
-          // Call server with timeout and abort controller
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 20000);
+          // Set a timeout for the server action
+          let isTimedOut = false;
+          const timeoutId = setTimeout(() => {
+            isTimedOut = true;
+            toast.dismiss(loadingToast);
+            toast.error("Server request timed out. Using fallback authentication.");
+            // Proceed anyway since we have a valid Firebase auth
+            toast.success("Signed in with limited functionality.");
+            router.push("/");
+          }, 20000);
           
           try {
-            // Use a custom fetch with timeout instead of the server action directly
-            // This gives us more control over the timeout behavior
-            const response = await fetch('/sign-in', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ email, idToken }),
-              signal: controller.signal
-            });
+            // Call the server action directly
+            const response = await signIn({ email, idToken });
+            
+            // If we already timed out, don't continue with the normal flow
+            if (isTimedOut) return;
             
             clearTimeout(timeoutId);
+            toast.dismiss(loadingToast);
             
-            if (response.ok) {
-              toast.dismiss(loadingToast);
-              toast.success("Signed in successfully.");
+            if (response.success) {
+              toast.success(response.message || "Signed in successfully.");
               router.push("/");
             } else {
-              // Try the server action as fallback
-              console.log("Fetch failed, trying server action directly");
-              const actionResponse = await signIn({ email, idToken });
-              
-              toast.dismiss(loadingToast);
-              if (actionResponse.success) {
-                toast.success(actionResponse.message || "Signed in successfully.");
-                router.push("/");
-              } else {
-                toast.error(actionResponse.message || "Failed to sign in. Please try again.");
-              }
+              toast.error(response.message || "Failed to sign in. Please try again.");
             }
-          } catch (fetchError: any) {
-            clearTimeout(timeoutId);
+          } catch (serverError: any) {
+            // If we already timed out, don't show additional errors
+            if (isTimedOut) return;
             
-            if (fetchError.name === 'AbortError') {
-              console.log("Fetch aborted due to timeout, trying server action directly");
-              
-              try {
-                // Try the server action as fallback with a shorter timeout
-                const actionTimeoutId = setTimeout(() => {
-                  toast.dismiss(loadingToast);
-                  toast.error("Server request timed out. Using fallback authentication.");
-                  // Proceed anyway since we have a valid Firebase auth
-                  toast.success("Signed in with limited functionality.");
-                  router.push("/");
-                }, 10000);
-                
-                const actionResponse = await signIn({ email, idToken });
-                clearTimeout(actionTimeoutId);
-                
-                toast.dismiss(loadingToast);
-                if (actionResponse.success) {
-                  toast.success(actionResponse.message || "Signed in successfully.");
-                  router.push("/");
-                } else {
-                  toast.error(actionResponse.message || "Failed to sign in. Please try again.");
-                }
-              } catch (actionError) {
-                // If both fetch and server action fail, use client-side only auth
-                console.error("Both fetch and server action failed:", actionError);
-                toast.dismiss(loadingToast);
-                toast.warning("Server authentication failed. Using client-side authentication only.");
-                router.push("/");
-              }
-            } else {
-              toast.dismiss(loadingToast);
-              toast.error(`Network error: ${fetchError.message || "Unknown error"}`);
-            }
+            clearTimeout(timeoutId);
+            toast.dismiss(loadingToast);
+            
+            console.error("Server action error:", serverError);
+            toast.error("Server error. Using client-side authentication.");
+            // Proceed anyway since we have a valid Firebase auth
+            router.push("/");
           }
         } catch (error: any) {
           toast.dismiss(loadingToast);

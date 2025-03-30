@@ -8,21 +8,32 @@ const SESSION_DURATION = 60 * 60 * 24 * 7;
 
 // Set session cookie
 export async function setSessionCookie(idToken: string) {
-  const cookieStore = await cookies();
+  try {
+    console.log("Starting setSessionCookie function...");
+    const cookieStore = await cookies();
+    console.log("Got cookie store successfully");
 
-  // Create session cookie
-  const sessionCookie = await auth.createSessionCookie(idToken, {
-    expiresIn: SESSION_DURATION * 1000, // milliseconds
-  });
+    // Create session cookie
+    console.log("Attempting to create session cookie with Firebase Admin...");
+    const sessionCookie = await auth.createSessionCookie(idToken, {
+      expiresIn: SESSION_DURATION * 1000, // milliseconds
+    });
+    console.log("Session cookie created successfully");
 
-  // Set cookie in the browser
-  cookieStore.set("session", sessionCookie, {
-    maxAge: SESSION_DURATION,
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    sameSite: "lax",
-  });
+    // Set cookie in the browser
+    console.log("Setting cookie in browser...");
+    cookieStore.set("session", sessionCookie, {
+      maxAge: SESSION_DURATION,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      sameSite: "lax",
+    });
+    console.log("Cookie set successfully");
+  } catch (error) {
+    console.error("Error in setSessionCookie:", error);
+    throw error; // Re-throw to be handled by the calling function
+  }
 }
 
 export async function signUp(params: SignUpParams) {

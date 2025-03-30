@@ -7,7 +7,7 @@ import { Analytics, getAnalytics } from "firebase/analytics";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCjra5dwOtJAYLjlJBlTXNE2uWjxNC1kDk",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ?? "AIzaSyCjra5dwOtJAYLjlJBlTXNE2uWjxNC1kDk",
   authDomain: "prewise-6f44b.firebaseapp.com",
   projectId: "prewise-6f44b",
   storageBucket: "prewise-6f44b.firebasestorage.app",
@@ -17,9 +17,11 @@ const firebaseConfig = {
 };
 
 // Log config (without sensitive values) for debugging
-console.log('Firebase config keys present:', Object.keys(firebaseConfig).filter(key => 
-  firebaseConfig[key as keyof typeof firebaseConfig] !== undefined
-));
+console.log('Firebase config:', {
+  hasApiKey: !!firebaseConfig.apiKey,
+  authDomain: firebaseConfig.authDomain,
+  projectId: firebaseConfig.projectId
+});
 
 // Initialize Firebase
 let app;

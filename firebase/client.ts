@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getAuth, Auth } from "firebase/auth";
+import { getFirestore, Firestore } from "firebase/firestore";
 // Dynamically import analytics to avoid SSR issues
 import { Analytics, getAnalytics } from "firebase/analytics";
 
@@ -53,8 +53,8 @@ if (typeof window !== 'undefined') {
 }
 
 // Initialize and export services
-let auth;
-let db;
+let auth: Auth;
+let db: Firestore;
 
 try {
   auth = getAuth(app);

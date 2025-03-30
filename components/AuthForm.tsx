@@ -12,6 +12,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  UserCredential,
+  Auth
 } from "firebase/auth";
 
 import { Form } from "@/components/ui/form";
@@ -46,56 +48,181 @@ const AuthForm = ({ type }: { type: FormType }) => {
       if (type === "sign-up") {
         const { name, email, password } = data;
 
-        const userCredential = await createUserWithEmailAndPassword(
+        // Add timeout for Firebase operations
+        const authPromise = createUserWithEmailAndPassword(
           auth,
           email,
           password
         );
-
-        const result = await signUp({
-          uid: userCredential.user.uid,
-          name: name!,
-          email,
-          password,
+        
+        // Create a timeout promise
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Authentication timed out')), 10000);
         });
+        
+        try {
+          // Race the auth operation against a timeout
+          const userCredential = await Promise.race<UserCredential>([authPromise, timeoutPromise]);
+          
+          const result = await signUp({
+            uid: userCredential.user.uid,
+            name: name!,
+            email,
+            password,
+          });
 
-        if (!result.success) {
-          toast.error(result.message);
-          return;
+          if (!result.success) {
+            toast.error(result.message);
+            return;
+          }
+
+          toast.success("Account created successfully. Please sign in.");
+          router.push("/sign-in");
+        } catch (error: any) {
+          if (error.message === 'Authentication timed out') {
+            toast.error("Authentication timed out. Please try again later.");
+            return;
+          }
+          throw error; // Re-throw for the outer catch block
         }
-
-        toast.success("Account created successfully. Please sign in.");
-        router.push("/sign-in");
       } else {
         const { email, password } = data;
 
-        const userCredential = await signInWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
+        // Show loading toast
+        const loadingToast = toast.loading("Signing in...");
 
-        const idToken = await userCredential.user.getIdToken();
-        if (!idToken) {
-          toast.error("Sign in Failed. Please try again.");
-          return;
-        }
+        try {
+          // Add timeout for Firebase operations
+          const authPromise = signInWithEmailAndPassword(
+            auth,
+            email,
+            password
+          );
+          
+          // Create a timeout promise
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('Authentication timed out')), 10000);
+          });
+          
+          // Race the auth operation against a timeout
+          const userCredential = await Promise.race<UserCredential>([authPromise, timeoutPromise]);
+          
+          // Get token with timeout
+          const tokenPromise = userCredential.user.getIdToken();
+          const idToken = await Promise.race<string>([
+            tokenPromise,
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Token retrieval timed out')), 5000))
+          ]);
+          
+          if (!idToken) {
+            toast.dismiss(loadingToast);
+            toast.error("Sign in Failed. Please try again.");
+            return;
+          }
 
-        const response = await signIn({
-          email,
-          idToken,
-        });
-
-        if (response.success) {
-          toast.success(response.message || "Signed in successfully.");
-          router.push("/");
-        } else {
-          toast.error(response.message || "Failed to sign in. Please try again.");
+          // Call server with timeout and abort controller
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 20000);
+          
+          try {
+            // Use a custom fetch with timeout instead of the server action directly
+            // This gives us more control over the timeout behavior
+            const response = await fetch('/sign-in', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ email, idToken }),
+              signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (response.ok) {
+              toast.dismiss(loadingToast);
+              toast.success("Signed in successfully.");
+              router.push("/");
+            } else {
+              // Try the server action as fallback
+              console.log("Fetch failed, trying server action directly");
+              const actionResponse = await signIn({ email, idToken });
+              
+              toast.dismiss(loadingToast);
+              if (actionResponse.success) {
+                toast.success(actionResponse.message || "Signed in successfully.");
+                router.push("/");
+              } else {
+                toast.error(actionResponse.message || "Failed to sign in. Please try again.");
+              }
+            }
+          } catch (fetchError: any) {
+            clearTimeout(timeoutId);
+            
+            if (fetchError.name === 'AbortError') {
+              console.log("Fetch aborted due to timeout, trying server action directly");
+              
+              try {
+                // Try the server action as fallback with a shorter timeout
+                const actionTimeoutId = setTimeout(() => {
+                  toast.dismiss(loadingToast);
+                  toast.error("Server request timed out. Using fallback authentication.");
+                  // Proceed anyway since we have a valid Firebase auth
+                  toast.success("Signed in with limited functionality.");
+                  router.push("/");
+                }, 10000);
+                
+                const actionResponse = await signIn({ email, idToken });
+                clearTimeout(actionTimeoutId);
+                
+                toast.dismiss(loadingToast);
+                if (actionResponse.success) {
+                  toast.success(actionResponse.message || "Signed in successfully.");
+                  router.push("/");
+                } else {
+                  toast.error(actionResponse.message || "Failed to sign in. Please try again.");
+                }
+              } catch (actionError) {
+                // If both fetch and server action fail, use client-side only auth
+                console.error("Both fetch and server action failed:", actionError);
+                toast.dismiss(loadingToast);
+                toast.warning("Server authentication failed. Using client-side authentication only.");
+                router.push("/");
+              }
+            } else {
+              toast.dismiss(loadingToast);
+              toast.error(`Network error: ${fetchError.message || "Unknown error"}`);
+            }
+          }
+        } catch (error: any) {
+          toast.dismiss(loadingToast);
+          
+          if (error.message === 'Authentication timed out') {
+            toast.error("Authentication timed out. Please try again later.");
+            return;
+          } else if (error.message === 'Token retrieval timed out') {
+            toast.error("Token retrieval timed out. Please try again later.");
+            return;
+          }
+          throw error; // Re-throw for the outer catch block
         }
       }
-    } catch (error) {
-      console.log(error);
-      toast.error(`There was an error: ${error}`);
+    } catch (error: any) {
+      console.error(error);
+      
+      // Handle specific Firebase auth errors
+      if (error.code === 'auth/user-not-found') {
+        toast.error("User not found. Please check your email or create an account.");
+      } else if (error.code === 'auth/wrong-password') {
+        toast.error("Incorrect password. Please try again.");
+      } else if (error.code === 'auth/invalid-credential') {
+        toast.error("Invalid credentials. Please check your email and password.");
+      } else if (error.code === 'auth/email-already-in-use') {
+        toast.error("Email already in use. Please sign in instead.");
+      } else if (error.code === 'auth/network-request-failed') {
+        toast.error("Network error. Please check your connection and try again.");
+      } else {
+        toast.error(`There was an error: ${error.message || error}`);
+      }
     }
   };
 

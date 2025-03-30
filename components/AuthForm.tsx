@@ -22,6 +22,23 @@ import { Button } from "@/components/ui/button";
 import { signIn, signUp } from "@/lib/actions/auth.action";
 import FormField from "./FormField";
 
+// Create a fallback authentication function
+const createFallbackAuth = (email: string, uid: string) => {
+  // Store basic auth info in localStorage
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem('fallbackAuth', JSON.stringify({
+        email,
+        uid,
+        timestamp: Date.now(),
+        isAuthenticated: true
+      }));
+    } catch (error) {
+      console.error('Error storing fallback auth:', error);
+    }
+  }
+};
+
 const authFormSchema = (type: FormType) => {
   return z.object({
     name: type === "sign-up" ? z.string().min(3) : z.string().optional(),
@@ -126,14 +143,33 @@ const AuthForm = ({ type }: { type: FormType }) => {
             isTimedOut = true;
             toast.dismiss(loadingToast);
             toast.error("Server request timed out. Using fallback authentication.");
+            
+            // Create fallback authentication
+            createFallbackAuth(email, userCredential.user.uid);
+            
             // Proceed anyway since we have a valid Firebase auth
             toast.success("Signed in with limited functionality.");
             router.push("/");
-          }, 20000);
+          }, 15000); // Reduced timeout to 15 seconds
           
           try {
-            // Call the server action directly
-            const response = await signIn({ email, idToken });
+            // Call the server action directly with a wrapped Promise that catches connection errors
+            const actionPromise = new Promise<any>(async (resolve, reject) => {
+              try {
+                const result = await signIn({ email, idToken });
+                resolve(result);
+              } catch (e) {
+                reject(e);
+              }
+            });
+            
+            // Race against a shorter timeout
+            const response = await Promise.race([
+              actionPromise,
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Internal timeout')), 12000)
+              )
+            ]);
             
             // If we already timed out, don't continue with the normal flow
             if (isTimedOut) return;
@@ -155,7 +191,17 @@ const AuthForm = ({ type }: { type: FormType }) => {
             toast.dismiss(loadingToast);
             
             console.error("Server action error:", serverError);
-            toast.error("Server error. Using client-side authentication.");
+            
+            if (serverError.message === 'Internal timeout' || 
+                serverError.message?.includes('Connection') || 
+                serverError.message?.includes('network')) {
+              toast.error("Connection error. Using client-side authentication.");
+              // Create fallback authentication
+              createFallbackAuth(email, userCredential.user.uid);
+            } else {
+              toast.error("Server error. Using client-side authentication.");
+            }
+            
             // Proceed anyway since we have a valid Firebase auth
             router.push("/");
           }

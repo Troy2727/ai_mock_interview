@@ -112,111 +112,113 @@ export async function signUp(params: SignUpParams) {
 export async function signIn(params: SignInParams) {
   const { email, idToken } = params;
 
-  // Add a timeout promise to prevent hanging
-  const timeoutPromise = new Promise<string>((_, reject) => {
-    setTimeout(() => reject(new Error('Firebase authentication timed out')), 10000);
-  });
-
   try {
     // Immediately set a fallback session cookie to ensure the user can proceed
-    // even if Firebase authentication fails or times out
     console.log("Setting fallback session cookie");
     await setSessionCookieHelper(FALLBACK_SESSION_TOKEN);
     
     // Check if we're in development mode or if Firebase credentials might be missing
     if (isMockMode()) {
       console.log("Using mock implementation for signIn");
-      
-      // Set a mock session cookie for development
       await setSessionCookieHelper(MOCK_SESSION_TOKEN_VALUE);
-      
       return {
         success: true,
         message: "Signed in successfully (development mode).",
       };
     }
 
-    // Wrap the entire authentication process in a try/catch with a short timeout
-    // This prevents the serverless function from timing out after 30 seconds
-    console.log("Starting authentication process with timeout protection");
+    console.log("Starting authentication process");
     
-    // Race the auth operation against a timeout
-    return await Promise.race([
-      (async () => {
-        try {
-          // Verify the user exists in Firebase Auth
-          console.log("Verifying user exists in Firebase Auth");
-          const userRecord = await auth.getUserByEmail(email);
-          if (!userRecord) {
-            console.log("User not found in Firebase Auth");
-            return {
-              success: false,
-              message: "User does not exist. Create an account.",
-            };
+    try {
+      // Verify the user exists in Firebase Auth with a shorter timeout
+      console.log("Verifying user exists in Firebase Auth");
+      const userRecord = await Promise.race([
+        auth.getUserByEmail(email),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Firebase Auth timeout')), 5000)
+        )
+      ]);
+
+      if (!userRecord) {
+        console.log("User not found in Firebase Auth");
+        return {
+          success: false,
+          message: "User does not exist. Create an account.",
+        };
+      }
+      console.log("User found in Firebase Auth, UID:", userRecord.uid);
+
+      try {
+        // Check if the user exists in Firestore with a separate timeout
+        console.log("Checking if user exists in Firestore");
+        const userDoc = await Promise.race([
+          db.collection("users").doc(userRecord.uid).get(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Firestore timeout')), 5000)
+          )
+        ]);
+        
+        // If user doesn't exist in Firestore, create a new record
+        if (!userDoc.exists) {
+          console.log("Creating new user record in database for:", userRecord.uid);
+          try {
+            await Promise.race([
+              db.collection("users").doc(userRecord.uid).set({
+                name: userRecord.displayName || email.split('@')[0],
+                email: email,
+                createdAt: new Date().toISOString(),
+                role: "user",
+              }),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Firestore write timeout')), 5000)
+              )
+            ]);
+            console.log("Successfully created user record in Firestore");
+          } catch (dbError) {
+            console.error("Error creating user in Firestore:", dbError);
+            // Continue with authentication even if Firestore write fails
           }
-          console.log("User found in Firebase Auth");
-
-          // Check if the user exists in Firestore
-          console.log("Checking if user exists in Firestore");
-          const userDoc = await db.collection("users").doc(userRecord.uid).get();
-          
-          // If user doesn't exist in Firestore, create a new record
-          if (!userDoc.exists) {
-            console.log("Creating new user record in database for:", userRecord.uid);
-            await db.collection("users").doc(userRecord.uid).set({
-              name: userRecord.displayName || email.split('@')[0], // Use displayName or extract name from email
-              email: email,
-              // profileURL,
-              // resumeURL,
-              createdAt: new Date().toISOString(),
-            });
-          }
-          console.log("User record confirmed in Firestore");
-
-          // Create a session cookie
-          console.log("Creating session cookie");
-          await setSessionCookie(idToken);
-
-          return {
-            success: true,
-            message: "Signed in successfully.",
-          };
-        } catch (error) {
-          console.error("Inner authentication error:", error);
-          
-          // Don't throw the error - we already set a fallback session cookie
-          // so the user can still use the application
-          return {
-            success: true,
-            message: "Signed in with limited functionality due to authentication issues.",
-            fallback: true
-          };
+        } else {
+          console.log("User record already exists in Firestore");
         }
-      })(),
-      timeoutPromise.then(() => {
-        console.log("Authentication timed out, using fallback");
-        return {
-          success: true,
-          message: "Signed in with limited functionality due to timeout.",
-          fallback: true
-        };
-      }).catch(error => {
-        console.error("Timeout error:", error);
-        return {
-          success: true,
-          message: "Signed in with limited functionality due to timeout.",
-          fallback: true
-        };
-      })
-    ]);
+      } catch (firestoreError) {
+        console.error("Firestore operation failed:", firestoreError);
+        // Continue with authentication even if Firestore operations fail
+      }
+
+      // Create a session cookie with a separate timeout
+      console.log("Creating session cookie");
+      try {
+        await Promise.race([
+          setSessionCookie(idToken),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Session cookie timeout')), 5000)
+          )
+        ]);
+      } catch (cookieError) {
+        console.error("Error setting session cookie:", cookieError);
+        // We already set the fallback cookie, so continue
+      }
+
+      return {
+        success: true,
+        message: "Signed in successfully.",
+      };
+    } catch (error) {
+      console.error("Authentication error:", error);
+      // We already set the fallback cookie, so return success with fallback
+      return {
+        success: true,
+        message: "Signed in with limited functionality due to authentication issues.",
+        fallback: true
+      };
+    }
   } catch (error) {
     console.error("Sign in error:", error);
-    
     // Even if there's an error, we've already set a fallback session cookie
-    // so the user can still use the application
     return {
       success: true,
-      message: "Signed in with limited functionality due to authentication issues.",
+      message: "Signed in with limited functionality.",
       fallback: true
     };
   }

@@ -14,6 +14,7 @@ enum CallStatus {
   CONNECTING = "CONNECTING",
   ACTIVE = "ACTIVE",
   FINISHED = "FINISHED",
+  ERROR = "ERROR",
 }
 
 interface SavedMessage {
@@ -117,26 +118,40 @@ const Agent = ({
   const handleCall = async () => {
     setCallStatus(CallStatus.CONNECTING);
 
-    if (type === "generate") {
-      await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
-        variableValues: {
-          username: userName,
-          userid: userId,
-        },
-      });
-    } else {
-      let formattedQuestions = "";
-      if (questions) {
-        formattedQuestions = questions
-          .map((question) => `- ${question}`)
-          .join("\n");
-      }
+    try {
+      if (type === "generate") {
+        await vapi.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!, {
+          variableValues: {
+            username: userName,
+            userid: userId,
+          },
+        });
+      } else {
+        let formattedQuestions = "";
+        if (questions) {
+          formattedQuestions = questions
+            .map((question) => `- ${question}`)
+            .join("\n");
+        }
 
-      await vapi.start(interviewer, {
-        variableValues: {
-          questions: formattedQuestions,
-        },
-      });
+        await vapi.start(interviewer, {
+          variableValues: {
+            questions: formattedQuestions,
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Error starting Vapi call:", error);
+      setCallStatus(CallStatus.ERROR);
+      
+      // Add a fallback message to the conversation
+      setMessages(prev => [
+        ...prev,
+        {
+          role: "system",
+          content: "There was an error connecting to the voice interview. This may be due to missing microphone permissions or browser compatibility issues. Please check your browser settings and try again."
+        }
+      ]);
     }
   };
 
@@ -203,19 +218,31 @@ const Agent = ({
                 callStatus !== "CONNECTING" && "hidden"
               )}
             />
-
-            <span className="relative">
-              {callStatus === "INACTIVE" || callStatus === "FINISHED"
-                ? "Call"
-                : ". . ."}
-            </span>
+            {callStatus === "ERROR" ? (
+              <>Retry Connection</>
+            ) : callStatus === "CONNECTING" ? (
+              <>Connecting...</>
+            ) : (
+              <>Start Interview</>
+            )}
           </button>
         ) : (
           <button className="btn-disconnect" onClick={() => handleDisconnect()}>
-            End
+            End Call
           </button>
         )}
       </div>
+      
+      {callStatus === "ERROR" && (
+        <div className="mt-4 text-center text-amber-500 max-w-md mx-auto">
+          <p>There was an error connecting to the voice interview. Please check that:</p>
+          <ul className="text-sm mt-2 list-disc text-left pl-8">
+            <li>Your browser has permission to access your microphone</li>
+            <li>You're using a supported browser (Chrome, Edge, or Safari)</li>
+            <li>You're on a secure (HTTPS) connection</li>
+          </ul>
+        </div>
+      )}
     </>
   );
 };

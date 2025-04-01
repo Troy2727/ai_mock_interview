@@ -155,176 +155,90 @@ const AuthForm = ({ type }: { type: FormType }) => {
         // Show loading toast
         const loadingToast = toast.loading("Signing in...");
 
+        // Simplified sign-in flow with better error handling
         try {
           console.log("Starting Firebase authentication...");
           
-          // For production, set up a pre-emptive fallback timer
-          // This will trigger client-side auth if the process takes too long
-          let fallbackTriggered = false;
+          // Create a single AbortController for all fetch operations
+          const controller = new AbortController();
+          const abortTimeoutId = setTimeout(() => controller.abort(), timeouts.firebase);
+          timeoutIds.push(abortTimeoutId);
           
-          if (isProduction) {
-            const earlyFallbackId = setTimeout(() => {
-              console.log("Pre-emptive fallback triggered");
-              fallbackTriggered = true;
-              
-              // Only show the toast if we're still in the loading state
-              toast.dismiss(loadingToast);
-              toast.warning("Using client-side authentication for faster access.");
-              
-              // Create fallback authentication with a placeholder UID
-              // We'll update this with the real UID if/when Firebase auth completes
-              createFallbackAuth(email, `temp-${Date.now()}`);
-              
-              // Proceed to home page immediately
-              setIsSubmitting(false);
-              router.push("/");
-            }, timeouts.firebase / 2); // Trigger halfway through the Firebase timeout
+          // Single timeout for the entire authentication process
+          const globalTimeoutId = setTimeout(() => {
+            console.log("Global authentication timeout reached");
+            // Clean up and use fallback
+            createFallbackAuth(email, `temp-${Date.now()}`);
             
-            timeoutIds.push(earlyFallbackId);
-          }
-          
-          // Add timeout for Firebase operations
-          const authPromise = signInWithEmailAndPassword(
-            auth,
-            email,
-            password
-          );
-          
-          // Create a timeout promise
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            const id = setTimeout(() => reject(new Error('Authentication timed out')), timeouts.firebase);
-            timeoutIds.push(id);
-          });
-          
-          // Race the auth operation against a timeout
-          console.log("Waiting for Firebase auth...");
-          const userCredential = await Promise.race<UserCredential>([authPromise, timeoutPromise]);
-          console.log("Firebase auth completed successfully");
-          
-          // If fallback was already triggered, just update the UID in localStorage
-          if (fallbackTriggered) {
-            console.log("Updating fallback auth with real UID");
-            createFallbackAuth(email, userCredential.user.uid);
-            return; // Exit early since navigation already happened
-          }
-          
-          // Get token with timeout
-          console.log("Requesting ID token...");
-          const tokenPromise = userCredential.user.getIdToken();
-          const tokenTimeoutPromise = new Promise<never>((_, reject) => {
-            const id = setTimeout(() => reject(new Error('Token retrieval timed out')), timeouts.token);
-            timeoutIds.push(id);
-          });
-          
-          const idToken = await Promise.race<string>([tokenPromise, tokenTimeoutPromise]);
-          console.log("ID token retrieved successfully");
-          
-          if (!idToken) {
             toast.dismiss(loadingToast);
-            toast.error("Sign in Failed. Please try again.");
-            setIsSubmitting(false);
-            return;
-          }
-
-          // Set a timeout for the server action
-          let isTimedOut = false;
-          const timeoutId = setTimeout(() => {
-            isTimedOut = true;
-            toast.dismiss(loadingToast);
-            toast.error("Server request timed out. Using fallback authentication.");
+            toast.warning("Authentication taking longer than expected. Using offline mode.");
             
-            // Create fallback authentication
-            createFallbackAuth(email, userCredential.user.uid);
-            
-            // Proceed anyway since we have a valid Firebase auth
-            toast.success("Signed in with limited functionality.");
             setIsSubmitting(false);
             router.push("/");
           }, timeouts.server);
-          timeoutIds.push(timeoutId);
+          timeoutIds.push(globalTimeoutId);
           
-          try {
-            console.log("Calling server action...");
-            // Call the server action directly with a wrapped Promise that catches connection errors
-            const actionPromise = new Promise<any>(async (resolve, reject) => {
-              try {
-                const result = await signIn({ email, idToken });
-                resolve(result);
-              } catch (e) {
-                console.error("Server action internal error:", e);
-                reject(e);
-              }
-            });
-            
-            // Race against a shorter timeout
-            const actionTimeoutPromise = new Promise((_, reject) => {
-              const id = setTimeout(() => reject(new Error('Internal timeout')), timeouts.internal);
-              timeoutIds.push(id);
-            });
-            
-            const response = await Promise.race([actionPromise, actionTimeoutPromise]);
-            console.log("Server action completed:", response);
-            
-            // If we already timed out, don't continue with the normal flow
-            if (isTimedOut) return;
-            
-            clearTimeout(timeoutId);
-            toast.dismiss(loadingToast);
-            
-            if (response.success) {
-              toast.success(response.message || "Signed in successfully.");
-              router.push("/");
-            } else {
-              toast.error(response.message || "Failed to sign in. Please try again.");
-              setIsSubmitting(false);
-            }
-          } catch (serverError: any) {
-            console.error("Server action error:", serverError);
-            
-            // If we already timed out, don't show additional errors
-            if (isTimedOut) return;
-            
-            clearTimeout(timeoutId);
-            toast.dismiss(loadingToast);
-            
-            if (serverError.message === 'Internal timeout' || 
-                serverError.message?.includes('Connection') || 
-                serverError.message?.includes('network')) {
-              toast.error("Connection error. Using client-side authentication.");
-              // Create fallback authentication
-              createFallbackAuth(email, userCredential.user.uid);
-            } else {
-              toast.error("Server error. Using client-side authentication.");
-            }
-            
-            // Proceed anyway since we have a valid Firebase auth
-            setIsSubmitting(false);
-            router.push("/");
+          // Single try-catch for the entire Firebase auth flow
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          console.log("Firebase auth completed successfully");
+          
+          // Get token
+          console.log("Requesting ID token...");
+          const idToken = await userCredential.user.getIdToken();
+          console.log("ID token retrieved successfully");
+          
+          if (!idToken) {
+            throw new Error("Failed to retrieve authentication token");
           }
-        } catch (error: any) {
-          console.error("Firebase auth error:", error);
+          
+          // Call server action
+          console.log("Calling server action...");
+          const response = await signIn({ email, idToken });
+          console.log("Server action completed:", response);
+          
+          // Clear all timeouts
+          clearTimeout(globalTimeoutId);
+          clearTimeout(abortTimeoutId);
+          
           toast.dismiss(loadingToast);
           
-          if (error.message === 'Authentication timed out') {
-            toast.error("Authentication timed out. Please try again later.");
-          } else if (error.message === 'Token retrieval timed out') {
-            toast.error("Token retrieval timed out. Please try again later.");
+          if (response.success) {
+            toast.success(response.message || "Signed in successfully.");
+            router.push("/");
           } else {
-            // Handle specific Firebase auth errors
-            if (error.code === 'auth/user-not-found') {
-              toast.error("User not found. Please check your email or create an account.");
-            } else if (error.code === 'auth/wrong-password') {
-              toast.error("Incorrect password. Please try again.");
-            } else if (error.code === 'auth/invalid-credential') {
-              toast.error("Invalid credentials. Please check your email and password.");
-            } else if (error.code === 'auth/network-request-failed') {
-              toast.error("Network error. Please check your connection and try again.");
-            } else {
-              toast.error(`Sign-in error: ${error.message || "Unknown error"}`);
-            }
+            toast.error(response.message || "Failed to sign in. Please try again.");
+            setIsSubmitting(false);
+          }
+        } catch (error: any) {
+          console.error("Sign-in error:", error);
+          toast.dismiss(loadingToast);
+          
+          // If aborted or timeout, use fallback
+          if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+            console.log("Using fallback authentication due to timeout");
+            createFallbackAuth(email, `fallback-${Date.now()}`);
+            toast.warning("Using offline mode due to slow connection.");
+            router.push("/");
+            return;
+          }
+          
+          // Handle specific Firebase auth errors
+          if (error.code === 'auth/user-not-found') {
+            toast.error("User not found. Please check your email or create an account.");
+          } else if (error.code === 'auth/wrong-password') {
+            toast.error("Incorrect password. Please try again.");
+          } else if (error.code === 'auth/invalid-credential') {
+            toast.error("Invalid credentials. Please check your email and password.");
+          } else if (error.code === 'auth/network-request-failed') {
+            toast.error("Network error. Please check your connection and try again.");
+            // Use fallback for network errors
+            createFallbackAuth(email, `fallback-${Date.now()}`);
+            toast.warning("Using offline mode.");
+            router.push("/");
+          } else {
+            toast.error(`Sign-in error: ${error.message || "Unknown error"}`);
           }
           setIsSubmitting(false);
-          return;
         }
       }
     } catch (error: any) {

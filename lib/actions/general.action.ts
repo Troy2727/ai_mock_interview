@@ -273,5 +273,7 @@ export async function getInterviewsByUserId(
 
 // Check if we're using mock implementation
 function isMockMode() {
-  return process.env.NODE_ENV === "development" || usingMock;
+  return process.env.NODE_ENV === "development" || 
+         usingMock || 
+         process.env.NEXT_PUBLIC_USE_MOCK === "true";
 }

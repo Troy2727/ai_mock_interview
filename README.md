@@ -15,10 +15,6 @@
   Build this project step-by-step with my detailed tutorial on <a href="https://github.com/Troy2727/ai_mock_interview.git" target="_blank"><b>JavaScript Maestro</b></a> Repositories. Join the JSMestro family!
 </p>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/Troy2727/ai_mock_interview/main/public/screenshots/app-interface.png" alt="PrepWise Application Interface" width="800" />
-</p>
-
 ## 📋 Table of Contents
 
 1. 🤖 [Introduction](#introduction)

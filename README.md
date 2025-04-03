@@ -1,12 +1,21 @@
-# Prepwise: Job Interview Platform with Vapi AI Voice Agents
+<div align="center">
+  <h1>Prepwise: Job Interview Platform with Vapi AI Voice Agents</h1>
+  <img src="/robot.png" alt="PrepWise AI Interview Robot" width="500" />
+</div>
 
-[![Next.js](https://img.shields.io/badge/Next.js-000?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
-[![Vapi](https://img.shields.io/badge/Vapi-5DFECA?style=for-the-badge)](https://vapi.ai/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss)](https://tailwindcss.com/)
-[![Firebase](https://img.shields.io/badge/Firebase-DD2C00?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
+<div align="center">
+  [![Next.js](https://img.shields.io/badge/Next.js-000?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
+  [![Vapi](https://img.shields.io/badge/Vapi-5DFECA?style=for-the-badge)](https://vapi.ai/)
+  [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss)](https://tailwindcss.com/)
+  [![Firebase](https://img.shields.io/badge/Firebase-DD2C00?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
+</div>
 
 <div align="center">
   Build this project step-by-step with my detailed tutorial on <a href="https://github.com/Troy2727/ai_mock_interview.git" target="_blank"><b>JavaScript Maestro</b></a> Repositories. Join the JSMestro family!
+</div>
+
+<div align="center">
+  <img src="/screenshots/app-interface.png" alt="PrepWise Application Interface" width="800" style="border-radius: 10px; margin: 20px 0;" />
 </div>
 
 ## 📋 Table of Contents
@@ -28,8 +37,6 @@ If you prefer visual learning, this is the perfect resource for you. Follow our 
 ## <a name="introduction">🤖 Introduction</a>
 
 Built with Next.js for the user interface and backend logic, Firebase for authentication and data storage, styled with TailwindCSS and using Vapi's voice agents, Prepwise is a website project designed to help you learn integrating AI models with your apps. The platform offers a sleek and modern experience for job interview preparation.
-
-
 
 ## <a name="tech-stack">⚙️ Tech Stack</a>
 
@@ -534,7 +541,7 @@ export const getRandomInterviewCover = () => {
         The questions are going to be read by a voice assistant so do not use "/" or "*" or any other special characters which might break the voice assistant.
         Return the questions formatted like this:
         ["Question 1", "Question 2", "Question 3"]
-        
+
         Thank you! <3
     `;
 ```
@@ -567,90 +574,88 @@ system:
 <summary><code>Display feedback (app/(root)/interview/[id]/feedback/page.tsx):</code></summary>
 
 ```javascript
-    <section className="section-feedback">
-      <div className="flex flex-row justify-center">
-        <h1 className="text-4xl font-semibold">
-          Feedback on the Interview -{" "}
-          <span className="capitalize">{interview.role}</span> Interview
-        </h1>
+<section className="section-feedback">
+  <div className="flex flex-row justify-center">
+    <h1 className="text-4xl font-semibold">
+      Feedback on the Interview -{" "}
+      <span className="capitalize">{interview.role}</span> Interview
+    </h1>
+  </div>
+
+  <div className="flex flex-row justify-center">
+    <div className="flex flex-row gap-5">
+      <div className="flex flex-row gap-2 items-center">
+        <Image src="/star.svg" width={22} height={22} alt="star" />
+        <p>
+          Overall Impression:{" "}
+          <span className="text-primary-200 font-bold">
+            {feedback?.totalScore}
+          </span>
+          /100
+        </p>
       </div>
 
-      <div className="flex flex-row justify-center">
-        <div className="flex flex-row gap-5">
-          <div className="flex flex-row gap-2 items-center">
-            <Image src="/star.svg" width={22} height={22} alt="star" />
-            <p>
-              Overall Impression:{" "}
-              <span className="text-primary-200 font-bold">
-                {feedback?.totalScore}
-              </span>
-              /100
-            </p>
-          </div>
-
-          <div className="flex flex-row gap-2">
-            <Image src="/calendar.svg" width={22} height={22} alt="calendar" />
-            <p>
-              {feedback?.createdAt
-                ? dayjs(feedback.createdAt).format("MMM D, YYYY h:mm A")
-                : "N/A"}
-            </p>
-          </div>
-        </div>
+      <div className="flex flex-row gap-2">
+        <Image src="/calendar.svg" width={22} height={22} alt="calendar" />
+        <p>
+          {feedback?.createdAt
+            ? dayjs(feedback.createdAt).format("MMM D, YYYY h:mm A")
+            : "N/A"}
+        </p>
       </div>
+    </div>
+  </div>
 
-      <hr />
+  <hr />
 
-      <p>{feedback?.finalAssessment}</p>
+  <p>{feedback?.finalAssessment}</p>
 
-      <div className="flex flex-col gap-4">
-        <h2>Breakdown of the Interview:</h2>
-        {feedback?.categoryScores?.map((category, index) => (
-          <div key={index}>
-            <p className="font-bold">
-              {index + 1}. {category.name} ({category.score}/100)
-            </p>
-            <p>{category.comment}</p>
-          </div>
-        ))}
+  <div className="flex flex-col gap-4">
+    <h2>Breakdown of the Interview:</h2>
+    {feedback?.categoryScores?.map((category, index) => (
+      <div key={index}>
+        <p className="font-bold">
+          {index + 1}. {category.name} ({category.score}/100)
+        </p>
+        <p>{category.comment}</p>
       </div>
+    ))}
+  </div>
 
-      <div className="flex flex-col gap-3">
-        <h3>Strengths</h3>
-        <ul>
-          {feedback?.strengths?.map((strength, index) => (
-            <li key={index}>{strength}</li>
-          ))}
-        </ul>
-      </div>
+  <div className="flex flex-col gap-3">
+    <h3>Strengths</h3>
+    <ul>
+      {feedback?.strengths?.map((strength, index) => (
+        <li key={index}>{strength}</li>
+      ))}
+    </ul>
+  </div>
 
-      <div className="flex flex-col gap-3">
-        <h3>Areas for Improvement</h3>
-        <ul>
-          {feedback?.areasForImprovement?.map((area, index) => (
-            <li key={index}>{area}</li>
-          ))}
-        </ul>
-      </div>
+  <div className="flex flex-col gap-3">
+    <h3>Areas for Improvement</h3>
+    <ul>
+      {feedback?.areasForImprovement?.map((area, index) => (
+        <li key={index}>{area}</li>
+      ))}
+    </ul>
+  </div>
 
-      <div className="buttons">
-        <Button className="btn-secondary flex-1">
-          <Link href="/" className="flex w-full justify-center">
-            <p className="text-sm font-semibold text-primary-200 text-center">
-              Back to dashboard
-            </p>
-          </Link>
-        </Button>
+  <div className="buttons">
+    <Button className="btn-secondary flex-1">
+      <Link href="/" className="flex w-full justify-center">
+        <p className="text-sm font-semibold text-primary-200 text-center">
+          Back to dashboard
+        </p>
+      </Link>
+    </Button>
 
-        <Button className="btn-primary flex-1">
-          <Link
-            href={`/interview/${id}`}
-            className="flex w-full justify-center"
-          >
-            <p className="text-sm font-semibold text-black text-center">
-              Retake Interview
-            </p>
-          </Link>
-        </Button>
-      </div>
-    </section>
+    <Button className="btn-primary flex-1">
+      <Link href={`/interview/${id}`} className="flex w-full justify-center">
+        <p className="text-sm font-semibold text-black text-center">
+          Retake Interview
+        </p>
+      </Link>
+    </Button>
+  </div>
+</section>
+```

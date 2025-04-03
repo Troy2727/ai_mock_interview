@@ -14,7 +14,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   UserCredential,
-  Auth
+  Auth,
 } from "firebase/auth";
 
 import { Form } from "@/components/ui/form";
@@ -26,42 +26,45 @@ import FormField from "./FormField";
 // Create a fallback authentication function
 const createFallbackAuth = (email: string, uid: string) => {
   // Store basic auth info in localStorage
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     try {
-      localStorage.setItem('fallbackAuth', JSON.stringify({
-        email,
-        uid,
-        timestamp: Date.now(),
-        isAuthenticated: true
-      }));
+      localStorage.setItem(
+        "fallbackAuth",
+        JSON.stringify({
+          email,
+          uid,
+          timestamp: Date.now(),
+          isAuthenticated: true,
+        })
+      );
       console.log("Fallback auth created successfully");
     } catch (error) {
-      console.error('Error storing fallback auth:', error);
+      console.error("Error storing fallback auth:", error);
     }
   }
 };
 
 // Check if we're in production environment
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = process.env.NODE_ENV === "production";
 
 // Adjust timeouts based on environment
 const getTimeouts = () => {
   // Use shorter timeouts in production
   if (isProduction) {
     return {
-      firebase: 5000,  // 5 seconds in production
-      token: 3000,     // 3 seconds in production
-      server: 8000,    // 8 seconds in production
-      internal: 6000   // 6 seconds in production
+      firebase: 5000, // 5 seconds in production
+      token: 3000, // 3 seconds in production
+      server: 8000, // 8 seconds in production
+      internal: 6000, // 6 seconds in production
     };
   }
-  
+
   // Use longer timeouts in development
   return {
-    firebase: 10000,  // 10 seconds in development
-    token: 5000,      // 5 seconds in development
-    server: 15000,    // 15 seconds in development
-    internal: 12000   // 12 seconds in development
+    firebase: 10000, // 10 seconds in development
+    token: 5000, // 5 seconds in development
+    server: 15000, // 15 seconds in development
+    internal: 12000, // 12 seconds in development
   };
 };
 
@@ -99,10 +102,10 @@ const AuthForm = ({ type }: { type: FormType }) => {
   const onSubmit = async (data: z.infer<typeof formSchema>) => {
     // Prevent multiple submissions
     if (isSubmitting) return;
-    
+
     setIsSubmitting(true);
     let timeoutIds: NodeJS.Timeout[] = [];
-    
+
     try {
       if (type === "sign-up") {
         const { name, email, password } = data;
@@ -113,17 +116,23 @@ const AuthForm = ({ type }: { type: FormType }) => {
           email,
           password
         );
-        
+
         // Create a timeout promise
         const timeoutPromise = new Promise<never>((_, reject) => {
-          const id = setTimeout(() => reject(new Error('Authentication timed out')), timeouts.firebase);
+          const id = setTimeout(
+            () => reject(new Error("Authentication timed out")),
+            timeouts.firebase
+          );
           timeoutIds.push(id);
         });
-        
+
         try {
           // Race the auth operation against a timeout
-          const userCredential = await Promise.race<UserCredential>([authPromise, timeoutPromise]);
-          
+          const userCredential = await Promise.race<UserCredential>([
+            authPromise,
+            timeoutPromise,
+          ]);
+
           const result = await signUp({
             uid: userCredential.user.uid,
             name: name!,
@@ -141,7 +150,7 @@ const AuthForm = ({ type }: { type: FormType }) => {
           router.push("/sign-in");
         } catch (error: any) {
           console.error("Sign-up error:", error);
-          if (error.message === 'Authentication timed out') {
+          if (error.message === "Authentication timed out") {
             toast.error("Authentication timed out. Please try again later.");
           } else {
             toast.error(`Sign-up error: ${error.message || "Unknown error"}`);
@@ -158,79 +167,99 @@ const AuthForm = ({ type }: { type: FormType }) => {
         // Simplified sign-in flow with better error handling
         try {
           console.log("Starting Firebase authentication...");
-          
+
           // Create a single AbortController for all fetch operations
           const controller = new AbortController();
-          const abortTimeoutId = setTimeout(() => controller.abort(), timeouts.firebase);
+          const abortTimeoutId = setTimeout(
+            () => controller.abort(),
+            timeouts.firebase
+          );
           timeoutIds.push(abortTimeoutId);
-          
+
           // Single timeout for the entire authentication process
           const globalTimeoutId = setTimeout(() => {
             console.log("Global authentication timeout reached");
             // Clean up and use fallback
             createFallbackAuth(email, `temp-${Date.now()}`);
-            
+
             toast.dismiss(loadingToast);
-            toast.warning("Authentication taking longer than expected. Using offline mode.");
-            
+            toast.warning(
+              "Authentication taking longer than expected. Using offline mode."
+            );
+
             setIsSubmitting(false);
             router.push("/");
           }, timeouts.server);
           timeoutIds.push(globalTimeoutId);
-          
+
           // Single try-catch for the entire Firebase auth flow
-          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          const userCredential = await signInWithEmailAndPassword(
+            auth,
+            email,
+            password
+          );
           console.log("Firebase auth completed successfully");
-          
+
           // Get token
           console.log("Requesting ID token...");
           const idToken = await userCredential.user.getIdToken();
           console.log("ID token retrieved successfully");
-          
+
           if (!idToken) {
             throw new Error("Failed to retrieve authentication token");
           }
-          
+
           // Call server action
           console.log("Calling server action...");
           const response = await signIn({ email, idToken });
           console.log("Server action completed:", response);
-          
+
           // Clear all timeouts
           clearTimeout(globalTimeoutId);
           clearTimeout(abortTimeoutId);
-          
+
           toast.dismiss(loadingToast);
-          
+
           if (response.success) {
             toast.success(response.message || "Signed in successfully.");
             router.push("/");
           } else {
-            toast.error(response.message || "Failed to sign in. Please try again.");
+            toast.error(
+              response.message || "Failed to sign in. Please try again."
+            );
             setIsSubmitting(false);
           }
         } catch (error: any) {
           console.error("Sign-in error:", error);
           toast.dismiss(loadingToast);
-          
+
           // If aborted or timeout, use fallback
-          if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+          if (
+            error.name === "AbortError" ||
+            error.message?.includes("timeout")
+          ) {
             console.log("Using fallback authentication due to timeout");
             createFallbackAuth(email, `fallback-${Date.now()}`);
             toast.warning("Using offline mode due to slow connection.");
             router.push("/");
             return;
           }
-          
+
           // Handle specific Firebase auth errors
-          if (error.code === 'auth/user-not-found') {
-            toast.error("User not found. Please check your email or create an account.");
-          } else if (error.code === 'auth/wrong-password') {
+          if (error.code === "auth/user-not-found") {
+            toast.error(
+              "User not found. Please check your email or create an account."
+            );
+          } else if (error.code === "auth/wrong-password") {
             toast.error("Incorrect password. Please try again.");
-          } else if (error.code === 'auth/invalid-credential') {
-            toast.error("Invalid credentials. Please check your email and password.");
-          } else if (error.code === 'auth/network-request-failed') {
-            toast.error("Network error. Please check your connection and try again.");
+          } else if (error.code === "auth/invalid-credential") {
+            toast.error(
+              "Invalid credentials. Please check your email and password."
+            );
+          } else if (error.code === "auth/network-request-failed") {
+            toast.error(
+              "Network error. Please check your connection and try again."
+            );
             // Use fallback for network errors
             createFallbackAuth(email, `fallback-${Date.now()}`);
             toast.warning("Using offline mode.");
@@ -243,25 +272,31 @@ const AuthForm = ({ type }: { type: FormType }) => {
       }
     } catch (error: any) {
       console.error("Outer error:", error);
-      
+
       // Handle specific Firebase auth errors
-      if (error.code === 'auth/user-not-found') {
-        toast.error("User not found. Please check your email or create an account.");
-      } else if (error.code === 'auth/wrong-password') {
+      if (error.code === "auth/user-not-found") {
+        toast.error(
+          "User not found. Please check your email or create an account."
+        );
+      } else if (error.code === "auth/wrong-password") {
         toast.error("Incorrect password. Please try again.");
-      } else if (error.code === 'auth/invalid-credential') {
-        toast.error("Invalid credentials. Please check your email and password.");
-      } else if (error.code === 'auth/email-already-in-use') {
+      } else if (error.code === "auth/invalid-credential") {
+        toast.error(
+          "Invalid credentials. Please check your email and password."
+        );
+      } else if (error.code === "auth/email-already-in-use") {
         toast.error("Email already in use. Please sign in instead.");
-      } else if (error.code === 'auth/network-request-failed') {
-        toast.error("Network error. Please check your connection and try again.");
+      } else if (error.code === "auth/network-request-failed") {
+        toast.error(
+          "Network error. Please check your connection and try again."
+        );
       } else {
         toast.error(`There was an error: ${error.message || error}`);
       }
       setIsSubmitting(false);
     } finally {
       // Clean up all timeouts
-      timeoutIds.forEach(id => clearTimeout(id));
+      timeoutIds.forEach((id) => clearTimeout(id));
       setIsSubmitting(false);
     }
   };
@@ -272,7 +307,13 @@ const AuthForm = ({ type }: { type: FormType }) => {
     <div className="card-border lg:min-w-[566px]">
       <div className="flex flex-col gap-6 card py-14 px-10">
         <div className="flex flex-row gap-2 justify-center">
-          <Image src="/logo.svg" alt="logo" height={32} width={38} />
+          <Image
+            src="/logo.svg"
+            alt="PrepWise Logo"
+            width={38}
+            height={34}
+            style={{ width: "auto", height: "auto" }}
+          />
           <h2 className="text-primary-100">PrepWise</h2>
         </div>
 
@@ -309,10 +350,18 @@ const AuthForm = ({ type }: { type: FormType }) => {
               type="password"
             />
 
-            <Button className="btn" type="submit" disabled={isSubmitting || !isEnvironmentReady}>
-              {isSubmitting 
-                ? (isSignIn ? "Signing In..." : "Creating Account...") 
-                : (isSignIn ? "Sign In" : "Create an Account")}
+            <Button
+              className="btn"
+              type="submit"
+              disabled={isSubmitting || !isEnvironmentReady}
+            >
+              {isSubmitting
+                ? isSignIn
+                  ? "Signing In..."
+                  : "Creating Account..."
+                : isSignIn
+                ? "Sign In"
+                : "Create an Account"}
             </Button>
           </form>
         </Form>

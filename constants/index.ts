@@ -97,27 +97,28 @@ export const mappings = {
   "aws amplify": "amplify",
 };
 
+// Optimize interviewer configuration for faster initialization
 export const interviewer: CreateAssistantDTO = {
   name: "Interviewer",
   firstMessage:
     "Hello! Thank you for taking the time to speak with me today. I'm excited to learn more about you and your experience.",
   transcriber: {
     provider: "deepgram",
-    model: "nova-2",
+    model: "nova-2", // Using nova-2 for faster transcription
     language: "en",
   },
   voice: {
     provider: "11labs",
     voiceId: "sarah",
     stability: 0.4,
-    similarityBoost: 0.8,
-    speed: 0.9,
+    similarityBoost: 0.7, // Slightly reduced for faster processing
+    speed: 1.0, // Slightly increased for faster responses
     style: 0.5,
     useSpeakerBoost: true,
   },
   model: {
     provider: "openai",
-    model: "gpt-4",
+    model: "gpt-4", // Consider using gpt-3.5-turbo for faster responses if needed
     messages: [
       {
         role: "system",

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ interface SavedMessage {
   content: string;
 }
 
-const Agent = ({
+const OptimizedAgent = ({
   userName,
   userId,
   interviewId,
@@ -71,7 +71,9 @@ const Agent = ({
           (error.message.includes("Meeting has ended") ||
             error.message.includes("Meeting ended"))
         ) {
-          console.log("Meeting ended error detected in Agent component");
+          console.log(
+            "Meeting ended error detected in OptimizedAgent component"
+          );
           setCallStatus(CallStatus.FINISHED);
 
           // Add a message to the conversation
@@ -100,7 +102,7 @@ const Agent = ({
         (event.error.message.includes("Meeting has ended") ||
           event.error.message.includes("Meeting ended"))
       ) {
-        console.log("Caught unhandled error in Agent component");
+        console.log("Caught unhandled error in OptimizedAgent component");
         setCallStatus(CallStatus.FINISHED);
         event.preventDefault();
       }
@@ -187,7 +189,7 @@ const Agent = ({
     }
   };
 
-  const handleCall = async () => {
+  const handleCall = useCallback(async () => {
     setCallStatus(CallStatus.CONNECTING);
 
     try {
@@ -219,23 +221,22 @@ const Agent = ({
       console.error("Error starting Vapi call:", error);
       setCallStatus(CallStatus.ERROR);
 
-      // Add a fallback message to the conversation with the specific error
+      // Add a fallback message to the conversation
       setMessages((prev) => [
         ...prev,
         {
           role: "system",
-          content: `There was an error connecting to the voice interview: ${
-            error.message || "Unknown error"
-          }. Please check your browser settings and try again.`,
+          content:
+            "There was an error connecting to the voice interview. This may be due to missing microphone permissions or browser compatibility issues. Please check your browser settings and try again.",
         },
       ]);
     }
-  };
+  }, [formattedQuestions, type, userName, userId]);
 
-  const handleDisconnect = () => {
+  const handleDisconnect = useCallback(() => {
     setCallStatus(CallStatus.FINISHED);
     vapi.stop();
-  };
+  }, []);
 
   return (
     <>
@@ -288,7 +289,7 @@ const Agent = ({
 
       <div className="w-full flex justify-center">
         {callStatus !== "ACTIVE" ? (
-          <button className="relative btn-call" onClick={() => handleCall()}>
+          <button className="relative btn-call" onClick={handleCall}>
             <span
               className={cn(
                 "absolute animate-ping rounded-full opacity-75",
@@ -304,7 +305,7 @@ const Agent = ({
             )}
           </button>
         ) : (
-          <button className="btn-disconnect" onClick={() => handleDisconnect()}>
+          <button className="btn-disconnect" onClick={handleDisconnect}>
             End Call
           </button>
         )}
@@ -320,25 +321,11 @@ const Agent = ({
             <li>Your browser has permission to access your microphone</li>
             <li>You're using a supported browser (Chrome, Edge, or Safari)</li>
             <li>You're on a secure (HTTPS) connection</li>
-            <li>Your microphone is properly connected and working</li>
-            <li>No other applications are using your microphone</li>
           </ul>
-          <div className="mt-4 p-3 bg-dark-300 rounded-lg text-xs text-left">
-            <p className="font-bold">Troubleshooting steps:</p>
-            <ol className="list-decimal pl-5 mt-1 space-y-1">
-              <li>Refresh the page and try again</li>
-              <li>
-                Check browser settings: click the lock/info icon in your address
-                bar and ensure microphone permissions are allowed
-              </li>
-              <li>Try using a different browser (Chrome works best)</li>
-              <li>Restart your browser</li>
-            </ol>
-          </div>
         </div>
       )}
     </>
   );
 };
 
-export default Agent;
+export default OptimizedAgent;

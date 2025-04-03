@@ -1,36 +1,27 @@
-import Vapi from "@vapi-ai/web";
+# Daily.co Error Handling
 
-// Add type declaration for the global Vapi instance
-declare global {
-  interface Window {
-    __VAPI_INSTANCE__?: any;
-    __VAPI_DAILY_ERROR_HANDLER__?: (error: any) => void;
-  }
-}
+This document explains the error handling implemented for Daily.co errors in the Vapi SDK integration.
 
-// Create a safe browser environment check
-let vapi: any;
+## The Problem
 
-// Configuration options for Vapi
-const vapiConfig = {
-  // Set to false in production to reduce console output
-  debug: process.env.NODE_ENV === "development",
-  // Timeout for API calls in milliseconds (3 seconds)
-  timeout: 3000,
-  // Retry configuration
-  retries: 1,
-};
+The error "Meeting ended in error: Meeting has ended" occurs when:
 
-// Create a mock vapi object for when initialization fails
-const createMockVapi = () => ({
-  on: () => {},
-  off: () => {},
-  start: () => Promise.resolve(),
-  stop: () => {},
-  setDebug: () => {},
-  setTimeout: () => {},
-});
+1. A Daily.co meeting session ends unexpectedly
+2. The connection to the Daily.co server is lost
+3. The meeting times out or is terminated by the server
+4. Another instance of the application tries to join the same meeting
 
+This error can disrupt the user experience and prevent the application from properly handling the end of an interview session.
+
+## The Solution
+
+We've implemented a comprehensive error handling strategy at multiple levels:
+
+### 1. Vapi SDK Wrapper
+
+We've created a wrapper around the Vapi SDK that intercepts all method calls and handles errors gracefully:
+
+```javascript
 // Create a wrapper for the Vapi instance that handles Daily.co errors
 const createVapiWrapper = (vapiInstance: any) => {
   // Create a proxy to intercept method calls
@@ -90,7 +81,13 @@ const createVapiWrapper = (vapiInstance: any) => {
     },
   });
 };
+```
 
+### 2. Global Error Handlers
+
+We've added global error handlers to catch Daily.co errors at the window level:
+
+```javascript
 // Set up a global error handler for Daily.co errors
 if (typeof window !== "undefined") {
   // Override the console.error method to catch Daily.co errors
@@ -133,80 +130,70 @@ if (typeof window !== "undefined") {
     }
   });
 }
+```
 
-// Only initialize Vapi on the client side, not during server-side rendering
-if (typeof window !== "undefined") {
+### 3. Component-Level Error Handling
+
+Both the `Agent` and `OptimizedAgent` components have been updated to handle Daily.co errors:
+
+```javascript
+// Add a special handler for unhandled errors
+const handleUnhandledError = (event: ErrorEvent) => {
+  if (
+    event.error &&
+    typeof event.error.message === "string" &&
+    (event.error.message.includes("Meeting has ended") ||
+      event.error.message.includes("Meeting ended"))
+  ) {
+    console.log("Caught unhandled error in Agent component");
+    setCallStatus(CallStatus.FINISHED);
+    event.preventDefault();
+  }
+};
+
+window.addEventListener("error", handleUnhandledError);
+
+// Clean up the event listener when the component unmounts
+return () => {
+  // ...
+  window.removeEventListener("error", handleUnhandledError);
+};
+```
+
+### 4. Singleton Pattern for Vapi Instance
+
+To prevent multiple instances of the Vapi SDK (and thus Daily.co) from being created, we've implemented a singleton pattern:
+
+```javascript
+// Create Vapi instance
+if (!window.__VAPI_INSTANCE__) {
   try {
-    // Create Vapi instance
-    if (!window.__VAPI_INSTANCE__) {
-      try {
-        console.log("Creating new Vapi instance");
-        // Create the Vapi instance
-        const vapiInstance = new Vapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN!);
-        // Wrap it with our error handler
-        vapi = createVapiWrapper(vapiInstance);
-        // Store the instance globally to prevent duplication
-        window.__VAPI_INSTANCE__ = vapi;
-      } catch (initError) {
-        console.error("Error initializing Vapi instance:", initError);
-        vapi = createMockVapi();
-      }
-    } else {
-      console.log("Using existing Vapi instance");
-      vapi = window.__VAPI_INSTANCE__;
-    }
-
-    // Enable debug mode only in development
-    if (vapi.setDebug && vapiConfig.debug) {
-      vapi.setDebug(vapiConfig.debug);
-    }
-
-    // Set timeout if the method exists
-    if (vapi.setTimeout) {
-      vapi.setTimeout(vapiConfig.timeout);
-    }
-
-    // Check for audio permissions if mediaDevices API is available
-    if (navigator && navigator.mediaDevices) {
-      // Test audio permissions immediately to catch issues early
-      const permissionTimeout = setTimeout(() => {
-        console.warn("Audio permission request timed out");
-      }, 2000);
-
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((stream) => {
-          clearTimeout(permissionTimeout);
-          // Clean up the test stream
-          stream.getTracks().forEach((track) => track.stop());
-          console.log("Audio permissions granted successfully");
-        })
-        .catch((err) => {
-          clearTimeout(permissionTimeout);
-          console.error("Audio permission error:", err.name, err.message);
-          // Use a non-blocking notification instead of alert
-          if (typeof document !== "undefined") {
-            const notification = document.createElement("div");
-            notification.style.cssText =
-              "position:fixed;top:0;left:0;right:0;background:#f44336;color:white;padding:10px;text-align:center;z-index:9999";
-            notification.textContent =
-              "Microphone access is required for interviews. Please enable it in your browser settings.";
-            document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 5000);
-          }
-        });
-    } else {
-      console.warn(
-        "MediaDevices API not available. Using mock Vapi implementation."
-      );
-    }
-  } catch (error) {
-    console.error("Error in Vapi initialization:", error);
+    console.log("Creating new Vapi instance");
+    vapi = new Vapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN!);
+    // Store the instance globally to prevent duplication
+    window.__VAPI_INSTANCE__ = vapi;
+  } catch (initError) {
+    console.error("Error initializing Vapi instance:", initError);
     vapi = createMockVapi();
   }
 } else {
-  // Create a mock vapi object that won't cause errors during SSR
-  vapi = createMockVapi();
+  console.log("Using existing Vapi instance");
+  vapi = window.__VAPI_INSTANCE__;
 }
+```
 
-export { vapi };
+## Benefits
+
+This error handling strategy provides several benefits:
+
+1. **Improved User Experience**: Users receive clear notifications when a meeting ends unexpectedly
+2. **Proper Resource Cleanup**: Resources are properly cleaned up when a meeting ends
+3. **Graceful Error Recovery**: The application can recover gracefully from Daily.co errors
+4. **Consistent State Management**: The application state is updated correctly when a meeting ends
+
+## Additional Recommendations
+
+1. **Session Management**: Consider implementing session management to track active interviews
+2. **Reconnection Logic**: Add reconnection logic to automatically reconnect if a meeting ends unexpectedly
+3. **Error Reporting**: Consider adding error reporting to track and analyze Daily.co errors
+4. **Timeout Handling**: Implement timeout handling to prevent interviews from running indefinitely

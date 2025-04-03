@@ -3,20 +3,20 @@
   <img src="/robot.png" alt="PrepWise AI Interview Robot" width="500" />
 </div>
 
-<div align="center">
-  [![Next.js](https://img.shields.io/badge/Next.js-000?style=for-the-badge&logo=nextdotjs)](https://nextjs.org/)
-  [![Vapi](https://img.shields.io/badge/Vapi-5DFECA?style=for-the-badge)](https://vapi.ai/)
-  [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss)](https://tailwindcss.com/)
-  [![Firebase](https://img.shields.io/badge/Firebase-DD2C00?style=for-the-badge&logo=firebase)](https://firebase.google.com/)
-</div>
+<p align="center">
+  <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-000?style=for-the-badge&logo=nextdotjs" alt="Next.js" /></a>
+  <a href="https://vapi.ai/"><img src="https://img.shields.io/badge/Vapi-5DFECA?style=for-the-badge" alt="Vapi" /></a>
+  <a href="https://tailwindcss.com/"><img src="https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss" alt="Tailwind CSS" /></a>
+  <a href="https://firebase.google.com/"><img src="https://img.shields.io/badge/Firebase-DD2C00?style=for-the-badge&logo=firebase" alt="Firebase" /></a>
+</p>
 
-<div align="center">
+<p align="center">
   Build this project step-by-step with my detailed tutorial on <a href="https://github.com/Troy2727/ai_mock_interview.git" target="_blank"><b>JavaScript Maestro</b></a> Repositories. Join the JSMestro family!
-</div>
+</p>
 
-<div align="center">
-  <img src="/screenshots/app-interface.png" alt="PrepWise Application Interface" width="800" style="border-radius: 10px; margin: 20px 0;" />
-</div>
+<p align="center">
+  <img src="/screenshots/app-interface.png" alt="PrepWise Application Interface" width="800" />
+</p>
 
 ## 📋 Table of Contents
 

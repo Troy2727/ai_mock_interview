@@ -169,7 +169,10 @@ To prevent multiple instances of the Vapi SDK (and thus Daily.co) from being cre
 if (!window.__VAPI_INSTANCE__) {
   try {
     console.log("Creating new Vapi instance");
-    vapi = new Vapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN!);
+    // Create the Vapi instance
+    const vapiInstance = new Vapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN!);
+    // Wrap it with our error handler
+    vapi = createVapiWrapper(vapiInstance);
     // Store the instance globally to prevent duplication
     window.__VAPI_INSTANCE__ = vapi;
   } catch (initError) {

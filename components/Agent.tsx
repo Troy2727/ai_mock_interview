@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { vapi } from "@/lib/vapi.sdk";
 import { interviewer } from "@/constants";
 import { createFeedback } from "@/lib/actions/general.action";
+import CopyButton from "./CopyButton";
 
 enum CallStatus {
   INACTIVE = "INACTIVE",
@@ -178,6 +179,18 @@ const Agent = ({
     });
 
     try {
+      // Check for browser compatibility issues before starting
+      if (
+        typeof navigator === "undefined" ||
+        !navigator.mediaDevices ||
+        typeof navigator.mediaDevices.getUserMedia !== "function"
+      ) {
+        console.warn(
+          "Browser doesn't fully support MediaDevices API, but continuing anyway"
+        );
+        // Continue anyway instead of throwing an error
+      }
+
       // Race between the actual call and the timeout
       await Promise.race([callFn(), timeoutPromise]);
       return true;
@@ -256,7 +269,7 @@ const Agent = ({
         </div>
 
         {/* User Profile Card */}
-        <div className="card-border">
+        <div className="card-border max-md:block">
           <div className="card-content">
             <Image
               src="/user-avatar.png"
@@ -282,6 +295,13 @@ const Agent = ({
             >
               {lastMessage}
             </p>
+          </div>
+          <div className="flex justify-end mt-2">
+            <CopyButton
+              text={messages.map((m) => `${m.role}: ${m.content}`).join("\n")}
+              label="Copy Transcript"
+              className="text-xs"
+            />
           </div>
         </div>
       )}

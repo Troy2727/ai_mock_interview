@@ -251,37 +251,50 @@ if (typeof window !== "undefined") {
     }
 
     // Check for audio permissions if mediaDevices API is available
-    if (navigator && navigator.mediaDevices) {
-      // Test audio permissions immediately to catch issues early
-      const permissionTimeout = setTimeout(() => {
-        console.warn("Audio permission request timed out");
-      }, 2000);
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        navigator &&
+        typeof navigator.mediaDevices !== "undefined" &&
+        navigator.mediaDevices &&
+        typeof navigator.mediaDevices.getUserMedia === "function"
+      ) {
+        // Test audio permissions immediately to catch issues early
+        const permissionTimeout = setTimeout(() => {
+          console.warn("Audio permission request timed out");
+        }, 2000);
 
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((stream) => {
-          clearTimeout(permissionTimeout);
-          // Clean up the test stream
-          stream.getTracks().forEach((track) => track.stop());
-          console.log("Audio permissions granted successfully");
-        })
-        .catch((err) => {
-          clearTimeout(permissionTimeout);
-          console.error("Audio permission error:", err.name, err.message);
-          // Use a non-blocking notification instead of alert
-          if (typeof document !== "undefined") {
-            const notification = document.createElement("div");
-            notification.style.cssText =
-              "position:fixed;top:0;left:0;right:0;background:#f44336;color:white;padding:10px;text-align:center;z-index:9999";
-            notification.textContent =
-              "Microphone access is required for interviews. Please enable it in your browser settings.";
-            document.body.appendChild(notification);
-            setTimeout(() => notification.remove(), 5000);
-          }
-        });
-    } else {
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((stream) => {
+            clearTimeout(permissionTimeout);
+            // Clean up the test stream
+            stream.getTracks().forEach((track) => track.stop());
+            console.log("Audio permissions granted successfully");
+          })
+          .catch((err) => {
+            clearTimeout(permissionTimeout);
+            console.error("Audio permission error:", err.name, err.message);
+            // Use a non-blocking notification instead of alert
+            if (typeof document !== "undefined") {
+              const notification = document.createElement("div");
+              notification.style.cssText =
+                "position:fixed;top:0;left:0;right:0;background:#f44336;color:white;padding:10px;text-align:center;z-index:9999";
+              notification.textContent =
+                "Microphone access is required for interviews. Please enable it in your browser settings.";
+              document.body.appendChild(notification);
+              setTimeout(() => notification.remove(), 5000);
+            }
+          });
+      } else {
+        console.warn(
+          "MediaDevices API not available or incomplete. Using mock Vapi implementation."
+        );
+      }
+    } catch (mediaDevicesError) {
+      console.error("Error accessing MediaDevices API:", mediaDevicesError);
       console.warn(
-        "MediaDevices API not available. Using mock Vapi implementation."
+        "Falling back to mock Vapi implementation due to MediaDevices error"
       );
     }
   } catch (error) {

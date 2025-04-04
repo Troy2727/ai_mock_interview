@@ -44,7 +44,7 @@ async function Home() {
           alt="robo-dude"
           width={400}
           height={400}
-          className="max-sm:hidden"
+          className="max-sm:w-[200px] max-sm:h-[200px] max-sm:mx-auto"
         />
       </section>
 

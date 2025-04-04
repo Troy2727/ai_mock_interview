@@ -11,7 +11,7 @@ const Layout = async ({ children }: { children: ReactNode }) => {
 
   return (
     <div className="root-layout">
-      <nav>
+      <nav className="w-full flex justify-center sm:justify-start">
         <Link href="/" className="flex items-center gap-2">
           <Image
             src="/logo.svg"

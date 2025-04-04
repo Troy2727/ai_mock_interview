@@ -262,15 +262,15 @@
   }
 
   .root-layout {
-    @apply flex mx-auto max-w-7xl flex-col gap-12 my-12 px-16 max-sm:px-4 max-sm:my-8;
+    @apply flex mx-auto max-w-7xl flex-col gap-12 my-12 px-16 max-sm:px-4 max-sm:my-6 max-sm:gap-8;
   }
 
   .card-cta {
-    @apply flex flex-row blue-gradient-dark rounded-3xl px-16 py-6 items-center justify-between max-sm:px-4;
+    @apply flex blue-gradient-dark rounded-3xl px-16 py-6 items-center justify-between max-sm:px-4 max-sm:py-8 max-sm:flex-col max-sm:gap-6;
   }
 
   .interviews-section {
-    @apply flex flex-wrap gap-4 max-lg:flex-col w-full items-stretch;
+    @apply flex flex-wrap gap-4 w-full items-stretch max-md:flex-col max-md:items-center;
   }
 
   .interview-text {

@@ -108,7 +108,27 @@ const OptimizedAgent = ({
       }
     };
 
+    // Add a handler for the custom vapi:meeting-ended event
+    const handleMeetingEnded = (event: CustomEvent) => {
+      console.log("Received vapi:meeting-ended event in OptimizedAgent");
+      setCallStatus(CallStatus.FINISHED);
+
+      // Add a message to the conversation
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "system",
+          content:
+            "The interview session has ended. Your responses have been saved.",
+        },
+      ]);
+    };
+
     window.addEventListener("error", handleUnhandledError);
+    window.addEventListener(
+      "vapi:meeting-ended",
+      handleMeetingEnded as EventListener
+    );
 
     // Return cleanup function
     return () => {
@@ -116,6 +136,10 @@ const OptimizedAgent = ({
         vapi.off(event as any, handler);
       });
       window.removeEventListener("error", handleUnhandledError);
+      window.removeEventListener(
+        "vapi:meeting-ended",
+        handleMeetingEnded as EventListener
+      );
     };
   }, []);
 
@@ -193,6 +217,13 @@ const OptimizedAgent = ({
     setCallStatus(CallStatus.CONNECTING);
 
     try {
+      // Check if we need to reset the Vapi instance
+      if (typeof window !== "undefined" && !window.__VAPI_INSTANCE__) {
+        console.log("Reloading the page to reset Vapi instance");
+        window.location.reload();
+        return;
+      }
+
       let success = false;
 
       if (type === "generate") {
@@ -221,15 +252,29 @@ const OptimizedAgent = ({
       console.error("Error starting Vapi call:", error);
       setCallStatus(CallStatus.ERROR);
 
+      // Check if this is a Daily.co error
+      const errorMessage = error?.message || "Unknown error";
+      const isDailyError =
+        errorMessage.includes("Meeting") &&
+        (errorMessage.includes("ended") || errorMessage.includes("has ended"));
+
       // Add a fallback message to the conversation
       setMessages((prev) => [
         ...prev,
         {
           role: "system",
-          content:
-            "There was an error connecting to the voice interview. This may be due to missing microphone permissions or browser compatibility issues. Please check your browser settings and try again.",
+          content: isDailyError
+            ? "The interview session could not be started because a previous session is still active. Please try again in a moment."
+            : "There was an error connecting to the voice interview. This may be due to missing microphone permissions or browser compatibility issues. Please check your browser settings and try again.",
         },
       ]);
+
+      // If it's a Daily.co error, reset the instance after a delay
+      if (isDailyError && typeof window !== "undefined") {
+        setTimeout(() => {
+          window.__VAPI_INSTANCE__ = undefined;
+        }, 2000);
+      }
     }
   }, [formattedQuestions, type, userName, userId]);
 

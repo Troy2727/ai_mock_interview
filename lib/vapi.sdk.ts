@@ -4,7 +4,7 @@ import Vapi from "@vapi-ai/web";
 declare global {
   interface Window {
     __VAPI_INSTANCE__?: any;
-    __VAPI_DAILY_ERROR_HANDLER__?: (error: any) => void;
+    __VAPI_DAILY_ERROR_HANDLER__?: (error: any) => boolean;
   }
 }
 
@@ -40,7 +40,33 @@ const createVapiWrapper = (vapiInstance: any) => {
       if (typeof target[prop] === "function") {
         return (...args: any[]) => {
           try {
-            // Call the original method
+            // Special handling for the start method
+            if (prop === "start") {
+              // Add a timeout to the start method to prevent hanging
+              const startPromise = target[prop](...args);
+              const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => {
+                  reject(
+                    new Error("Vapi start method timed out after 10 seconds")
+                  );
+                }, 10000); // 10 second timeout
+              });
+
+              return Promise.race([startPromise, timeoutPromise]).catch(
+                (error) => {
+                  console.error(`Error in Vapi start method:`, error);
+                  // Try to clean up any resources
+                  try {
+                    target.stop();
+                  } catch (cleanupError) {
+                    console.error("Error during cleanup:", cleanupError);
+                  }
+                  throw error;
+                }
+              );
+            }
+
+            // Call the original method for other methods
             const result = target[prop](...args);
 
             // If the result is a Promise, handle any errors
@@ -93,6 +119,42 @@ const createVapiWrapper = (vapiInstance: any) => {
 
 // Set up a global error handler for Daily.co errors
 if (typeof window !== "undefined") {
+  // Store a reference to the original error handler
+  if (!window.__VAPI_DAILY_ERROR_HANDLER__) {
+    window.__VAPI_DAILY_ERROR_HANDLER__ = (error: any) => {
+      // Check if this is a Daily.co error
+      if (
+        error &&
+        typeof error.message === "string" &&
+        (error.message.includes("Meeting has ended") ||
+          error.message.includes("Meeting ended"))
+      ) {
+        console.log(
+          "Daily.co meeting ended error detected, cleaning up resources"
+        );
+
+        // Try to clean up any Daily.co resources
+        try {
+          if (window.__VAPI_INSTANCE__) {
+            window.__VAPI_INSTANCE__.stop();
+
+            // Dispatch a custom event that components can listen for
+            const meetingEndedEvent = new CustomEvent("vapi:meeting-ended", {
+              detail: { error },
+            });
+            window.dispatchEvent(meetingEndedEvent);
+          }
+        } catch (cleanupError) {
+          console.error("Error during Daily.co cleanup:", cleanupError);
+        }
+
+        return true; // Error was handled
+      }
+
+      return false; // Error was not handled
+    };
+  }
+
   // Override the console.error method to catch Daily.co errors
   const originalConsoleError = console.error;
   console.error = function (...args) {
@@ -105,30 +167,23 @@ if (typeof window !== "undefined") {
       errorMessage.includes("Meeting has ended") ||
       errorMessage.includes("Meeting ended")
     ) {
-      // Try to clean up any Daily.co resources
-      try {
-        if (window.__VAPI_INSTANCE__) {
-          window.__VAPI_INSTANCE__.stop();
-        }
-      } catch (cleanupError) {
-        originalConsoleError.call(
-          console,
-          "Error during cleanup:",
-          cleanupError
-        );
-      }
+      // Use the error handler if defined
+      window.__VAPI_DAILY_ERROR_HANDLER__?.({ message: errorMessage });
     }
   };
 
   // Add a global unhandled rejection handler
   window.addEventListener("unhandledrejection", (event) => {
-    if (
-      event.reason &&
-      typeof event.reason.message === "string" &&
-      (event.reason.message.includes("Meeting has ended") ||
-        event.reason.message.includes("Meeting ended"))
-    ) {
+    if (event.reason && window.__VAPI_DAILY_ERROR_HANDLER__?.(event.reason)) {
       console.log("Caught unhandled rejection for Meeting ended error");
+      event.preventDefault();
+    }
+  });
+
+  // Add a global error handler
+  window.addEventListener("error", (event) => {
+    if (event.error && window.__VAPI_DAILY_ERROR_HANDLER__?.(event.error)) {
+      console.log("Caught global error for Meeting ended error");
       event.preventDefault();
     }
   });
@@ -137,24 +192,53 @@ if (typeof window !== "undefined") {
 // Only initialize Vapi on the client side, not during server-side rendering
 if (typeof window !== "undefined") {
   try {
-    // Create Vapi instance
-    if (!window.__VAPI_INSTANCE__) {
+    // Function to create a new Vapi instance
+    const createNewVapiInstance = () => {
       try {
         console.log("Creating new Vapi instance");
         // Create the Vapi instance
         const vapiInstance = new Vapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN!);
         // Wrap it with our error handler
-        vapi = createVapiWrapper(vapiInstance);
+        const wrappedInstance = createVapiWrapper(vapiInstance);
         // Store the instance globally to prevent duplication
-        window.__VAPI_INSTANCE__ = vapi;
+        window.__VAPI_INSTANCE__ = wrappedInstance;
+        return wrappedInstance;
       } catch (initError) {
         console.error("Error initializing Vapi instance:", initError);
-        vapi = createMockVapi();
+        return createMockVapi();
       }
+    };
+
+    // Check if we need to create a new instance or use the existing one
+    if (!window.__VAPI_INSTANCE__) {
+      vapi = createNewVapiInstance();
     } else {
-      console.log("Using existing Vapi instance");
-      vapi = window.__VAPI_INSTANCE__;
+      // Check if the existing instance is still valid
+      try {
+        // Try to access a property to see if the instance is still valid
+        if (typeof window.__VAPI_INSTANCE__.on === "function") {
+          console.log("Using existing Vapi instance");
+          vapi = window.__VAPI_INSTANCE__;
+        } else {
+          console.warn("Existing Vapi instance is invalid, creating a new one");
+          vapi = createNewVapiInstance();
+        }
+      } catch (error) {
+        console.warn(
+          "Error accessing existing Vapi instance, creating a new one"
+        );
+        vapi = createNewVapiInstance();
+      }
     }
+
+    // Listen for the custom meeting ended event
+    window.addEventListener("vapi:meeting-ended", () => {
+      console.log("Meeting ended event received, resetting Vapi instance");
+      // Reset the instance on next access
+      setTimeout(() => {
+        window.__VAPI_INSTANCE__ = undefined;
+      }, 1000);
+    });
 
     // Enable debug mode only in development
     if (vapi.setDebug && vapiConfig.debug) {

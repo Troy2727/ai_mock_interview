@@ -266,7 +266,10 @@ const OptimizedAgent = ({
       setCallStatus(CallStatus.ERROR);
 
       // Check if this is a Daily.co error
-      const errorMessage = error?.message || "Unknown error";
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : String(error || "Unknown error");
       const isDailyError =
         errorMessage.includes("Meeting") &&
         (errorMessage.includes("ended") || errorMessage.includes("has ended"));

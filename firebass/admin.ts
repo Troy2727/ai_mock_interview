@@ -7,14 +7,32 @@ function initFirebaseAdmin() {
   const apps = getApps();
 
   if (!apps.length) {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        // Replace newlines in the private key
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      }),
-    });
+    // Get the private key
+    let privateKey = process.env.FIREBASE_PRIVATE_KEY;
+
+    // Handle different formats of the private key
+    if (privateKey) {
+      // If the key is JSON-stringified, parse it
+      if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        privateKey = JSON.parse(privateKey);
+      }
+
+      // Replace literal \n with newlines if they exist
+      privateKey = privateKey.replace(/\\n/g, "\n");
+    }
+
+    try {
+      initializeApp({
+        credential: cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey,
+        }),
+      });
+    } catch (error) {
+      console.error("Error initializing Firebase Admin:", error);
+      throw error;
+    }
   }
 
   return {

@@ -22,19 +22,31 @@ export async function getInterviewByUserId(userId?: string): Promise<Interview[]
 export async function getLatestInterviews(params: GetLatestInterviewsParams): Promise<Interview[] | null> {
     const { userId } = params;
 
-    // If userId is undefined, just get interviews without the userId filter
-    let query = db.collection('interviews')
-        .orderBy('createdAt', 'desc')
-        .where('finalized', '==', true);
+    try {
+        // Simplified query to avoid needing a composite index
+        let query = db.collection('interviews')
+            .where('finalized', '==', true)
+            .orderBy('createdAt', 'desc')
+            .limit(10); // Limit to 10 most recent interviews
 
-    // Only add the userId filter if userId is defined
-    if (userId) {
-        query = query.where('userId', '!=', userId);
+        const interviews = await query.get();
+
+        // Filter out the user's own interviews in memory instead of in the query
+        let results = interviews.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data()
+        })) as Interview[];
+
+        // If userId is provided, filter out the user's own interviews
+        if (userId) {
+            results = results.filter(interview => interview.userId !== userId);
+        }
+
+        return results;
+    } catch (error) {
+        console.error("Error fetching latest interviews:", error);
+        return [];
     }
-
-    const Interviews = await query.get();
-
-    return Interviews.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Interview[];
 }
 
 export async function getInterviewById(id: string): Promise<Interview | null> {

@@ -151,8 +151,13 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
     // Patch the Error constructor to catch ejection errors at creation time
     const OriginalError = window.Error;
     window.Error = function(message?: string) {
-      const error = new OriginalError(message);
+      // Create a proper error object
+      const error = new OriginalError(message || '');
 
+      // Log all error creations for debugging
+      console.log('Error created:', message || '(empty error)');
+
+      // Check for ejection errors
       if (message &&
           (message.toLowerCase().includes('meeting ended due to ejection') ||
            message.toLowerCase().includes('meeting has ended'))) {
@@ -161,6 +166,40 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
         setTimeout(() => {
           handleEjectionError(message);
         }, 0);
+      } else if (!message || message === '{}' || message === 'undefined' || message === '[object Object]') {
+        // Handle empty error messages which might be from Vapi
+        console.log('Empty or invalid error detected, might be from Vapi:', message);
+
+        // Check if this is during a Vapi call
+        if (typeof window !== 'undefined' && (window as any).__VAPI_INSTANCE__) {
+          console.log('Error during Vapi call, treating as connection issue');
+
+          // Try to clean up the Vapi instance
+          try {
+            const vapiInstance = (window as any).__VAPI_INSTANCE__;
+            if (vapiInstance && typeof vapiInstance.stop === 'function') {
+              console.log('Attempting to stop Vapi instance after error');
+              vapiInstance.stop().catch((stopError: any) => {
+                console.warn('Error stopping Vapi instance:', stopError);
+              });
+            }
+
+            // Reset the Vapi instance
+            if (typeof resetVapiInstance === 'function') {
+              resetVapiInstance();
+            } else {
+              (window as any).__VAPI_INSTANCE__ = null;
+            }
+          } catch (cleanupError) {
+            console.warn('Error cleaning up Vapi instance:', cleanupError);
+          }
+
+          setTimeout(() => {
+            // Redirect to dashboard with a more helpful message
+            toast.error('Connection issue with the interview service. Please try again later.');
+            router.push('/dashboard');
+          }, 0);
+        }
       }
 
       return error;

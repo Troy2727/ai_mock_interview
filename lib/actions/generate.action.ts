@@ -23,26 +23,34 @@ export async function getLatestInterviews(params: GetLatestInterviewsParams): Pr
     const { userId } = params;
 
     try {
-        // Simplified query to avoid needing a composite index
+        // Use a simpler query that doesn't require a composite index
+        // Just get all finalized interviews without ordering
         let query = db.collection('interviews')
             .where('finalized', '==', true)
-            .orderBy('createdAt', 'desc')
-            .limit(10); // Limit to 10 most recent interviews
+            .limit(20); // Get more interviews since we'll sort in memory
 
         const interviews = await query.get();
 
-        // Filter out the user's own interviews in memory instead of in the query
+        // Process results in memory
         let results = interviews.docs.map((doc) => ({
             id: doc.id,
             ...doc.data()
         })) as Interview[];
+
+        // Sort by createdAt in memory
+        results.sort((a, b) => {
+            const dateA = new Date(a.createdAt).getTime();
+            const dateB = new Date(b.createdAt).getTime();
+            return dateB - dateA; // Descending order (newest first)
+        });
 
         // If userId is provided, filter out the user's own interviews
         if (userId) {
             results = results.filter(interview => interview.userId !== userId);
         }
 
-        return results;
+        // Limit to 10 after filtering
+        return results.slice(0, 10);
     } catch (error) {
         console.error("Error fetching latest interviews:", error);
         return [];

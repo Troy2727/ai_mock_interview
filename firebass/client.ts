@@ -16,15 +16,16 @@ import { getFirestore } from "firebase/firestore";
 // and domain restrictions, not by keeping the API key private.
 // See: https://firebase.google.com/docs/projects/api-keys
 
+// Ensure we have fallback values for development
 const firebaseConfig = {
   // These values are intentionally public and designed to be included in client-side code
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyCjra5dwOtJAYLjlJBlTXNE2uWjxNC1kDk",
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "prewise-6f44b.firebaseapp.com",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "prewise-6f44b",
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "prewise-6f44b.firebasestorage.app",
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "424923985679",
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:424923985679:web:67e047a76cbda4f2a9b07a",
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-LF4L1E9D22"
 };
 
 // Initialize Firebase with error handling
@@ -34,20 +35,8 @@ let db;
 let provider;
 
 try {
-  // Check if all required environment variables are present
-  const requiredEnvVars = [
-    'NEXT_PUBLIC_FIREBASE_API_KEY',
-    'NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN',
-    'NEXT_PUBLIC_FIREBASE_PROJECT_ID'
-  ];
-
-  const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
-
-  if (missingEnvVars.length > 0) {
-    console.error(`Missing required environment variables: ${missingEnvVars.join(', ')}`);
-    throw new Error('Firebase configuration is incomplete');
-  }
-
+  // Initialize Firebase without checking environment variables
+  // We're using hardcoded fallback values in firebaseConfig
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
   provider = new GoogleAuthProvider();

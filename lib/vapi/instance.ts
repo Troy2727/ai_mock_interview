@@ -1,10 +1,10 @@
 /**
  * Vapi instance management
  */
-// Import the real Vapi SDK (commented out for now)
-// import Vapi from '@vapi-ai/web';
+// Import the real Vapi SDK
+import Vapi from '@vapi-ai/web';
 
-// Import our mock implementation
+// Import our mock implementation (for fallback)
 import { MockVapi } from './mock';
 
 import { connectionState, setupConnectionMonitoring, startKeepAlive, stopKeepAlive } from './connection';
@@ -13,8 +13,8 @@ import { handleConnectionLost, handleEjectionError } from './error-handling';
 // Create a singleton instance of Vapi to prevent multiple initializations
 let vapiInstance: any = null;
 
-// Use the mock implementation instead of the real one
-const Vapi = MockVapi;
+// Use the real Vapi implementation
+// const Vapi = MockVapi;
 
 // Expose the Vapi instance globally for error handling
 if (typeof window !== 'undefined') {
@@ -50,56 +50,65 @@ export function getVapiInstance(options?: {
   onEjection?: (error?: Error) => void;
 }): any {
   if (!vapiInstance) {
-    // Create a mock Vapi instance
-    vapiInstance = {
-      // Basic methods
-      start: async () => {
-        console.log('Mock Vapi: Starting call...');
-        // Simulate a successful call start after a short delay
-        setTimeout(() => {
-          if (typeof vapiInstance._eventHandlers['call-start'] === 'function') {
-            vapiInstance._eventHandlers['call-start']();
-          }
-        }, 1000);
-        return { id: 'mock-call-id' };
-      },
-      stop: async () => {
-        console.log('Mock Vapi: Stopping call...');
-        // Simulate a call end
-        setTimeout(() => {
-          if (typeof vapiInstance._eventHandlers['call-end'] === 'function') {
-            vapiInstance._eventHandlers['call-end']();
-          }
-        }, 500);
-      },
-      send: (message: any) => {
-        console.log('Mock Vapi: Sending message:', message);
-      },
-      say: (text: string) => {
-        console.log('Mock Vapi: Saying:', text);
-      },
-      isMuted: () => false,
-      setMuted: (muted: boolean) => {
-        console.log('Mock Vapi: Setting muted:', muted);
-      },
+    console.log('Creating new Vapi instance...');
 
-      // Event handling
-      _eventHandlers: {} as Record<string, Function>,
-      on: function(event: string, handler: Function) {
-        console.log('Mock Vapi: Adding event listener for', event);
-        this._eventHandlers[event] = handler;
-      },
-      off: function(event: string, handler: Function) {
-        console.log('Mock Vapi: Removing event listener for', event);
-        if (this._eventHandlers[event] === handler) {
-          delete this._eventHandlers[event];
+    // Check if we're in a browser environment
+    if (typeof window === 'undefined') {
+      console.warn('Not in browser environment, using mock implementation');
+      vapiInstance = new MockVapi('mock-token');
+    }
+    // Check if we have the Vapi token
+    else if (!process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN) {
+      console.warn('No VAPI_WEB_TOKEN found, using mock implementation');
+      vapiInstance = new MockVapi('mock-token');
+    }
+    // Try to create a real Vapi instance
+    else {
+      try {
+        console.log('Creating real Vapi instance with token:',
+          process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN.substring(0, 5) + '...');
+
+        // Create the real Vapi instance with proper error handling
+        vapiInstance = new Vapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
+        console.log('Real Vapi instance created successfully');
+
+        // Set up all event handlers according to documentation
+        if (typeof vapiInstance.on === 'function') {
+          // Error handler
+          vapiInstance.on('error', (error: any) => {
+            console.error('Vapi instance error event:', error);
+            if (options?.onError) {
+              options.onError(error instanceof Error ? error : new Error(String(error)));
+            }
+          });
+
+          // Call status handlers
+          vapiInstance.on('call-start', () => {
+            console.log('Call has started');
+            connectionState.isConnected = true;
+            connectionState.lastPingTime = Date.now();
+          });
+
+          vapiInstance.on('call-end', () => {
+            console.log('Call has ended');
+            connectionState.isConnected = false;
+          });
+
+          // Speech handlers
+          vapiInstance.on('speech-start', () => {
+            console.log('Assistant speech has started');
+          });
+
+          vapiInstance.on('speech-end', () => {
+            console.log('Assistant speech has ended');
+          });
         }
-      },
-      removeAllListeners: function() {
-        console.log('Mock Vapi: Removing all listeners');
-        this._eventHandlers = {};
+      } catch (error) {
+        console.error('Error creating Vapi instance, falling back to mock:', error);
+        // Fallback to mock if real Vapi fails
+        vapiInstance = new MockVapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
       }
-    };
+    }
 
     // Update global reference
     if (typeof window !== 'undefined') {

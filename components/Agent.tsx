@@ -136,8 +136,12 @@ const Agent = ({userName, userId, type}: AgentProps) => {
 
     const handleCall = async () => {
       try {
+        console.log('Starting interview generation...');
+        toast.info('Starting interview generation...');
+
         // Check microphone permission before starting the call
         const hasPermission = await checkMicrophonePermission();
+        console.log('Microphone permission:', hasPermission);
 
         if (!hasPermission) {
           setShowAudioTroubleshooter(true);
@@ -148,37 +152,117 @@ const Agent = ({userName, userId, type}: AgentProps) => {
         setErrorMessage(null);
         setCallStatus(CallStatus.CONNECTING);
 
+        // Log Vapi configuration
+        console.log('Vapi token available:', !!process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
+        console.log('Vapi workflow ID:', process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID);
+
+        // Validate Vapi configuration
+        if (!process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN) {
+          toast.error('Vapi Web Token is missing. Please check your environment variables.');
+          throw new Error('Vapi Web Token is missing. Please check your environment variables.');
+        }
+
+        if (!process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID) {
+          toast.error('Vapi Workflow ID is missing. Please check your environment variables.');
+          throw new Error('Vapi Workflow ID is missing. Please check your environment variables.');
+        }
+
+        // Clean up any existing Vapi instance
+        resetVapiInstance();
+
         // Save call configuration for potential reconnection
         const callConfig = {
           workflowId: process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID,
           variableValues: {
-            username: userName,
-            userid: userId,
+            username: userName || 'User',
+            userid: userId || 'anonymous',
           }
         };
-
-        // Save the call configuration for potential reconnection
+        console.log('Call config:', callConfig);
         saveCallConfig(callConfig);
 
         // Start the call with enhanced connection handling
-        await startEnhancedCall(
-          process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID!,
-          {
-            variableValues: {
-              username: userName,
-              userid: userId,
-            }
-          }
-        );
+        console.log('Starting enhanced call...');
 
-        // Update UI to show connecting state
-        toast.success('Interview started successfully');
+        // Based on Vapi documentation, we need to:
+        // 1. Create a new Vapi instance
+        // 2. Set up event handlers
+        // 3. Start the call
+
+        // Create a new Vapi instance directly (not using our wrapper)
+        try {
+          // Import Vapi dynamically to ensure it's loaded in the browser
+          const Vapi = (await import('@vapi-ai/web')).default;
+          const vapiInstance = new Vapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
+
+          // Set up event handlers
+          vapiInstance.on('error', (error: any) => {
+            console.error('Vapi error:', error);
+            setErrorMessage(`Audio error: ${error instanceof Error ? error.message : String(error)}`);
+          });
+
+          vapiInstance.on('call-start', () => {
+            console.log('Call started');
+            setCallStatus(CallStatus.ACTIVE);
+            toast.success('Interview started successfully');
+          });
+
+          vapiInstance.on('call-end', () => {
+            console.log('Call ended');
+            setCallStatus(CallStatus.INACTIVE);
+          });
+
+          // Start the call
+          const result = await vapiInstance.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID, {
+            variableValues: {
+              username: userName || 'User',
+              userid: userId || 'anonymous',
+            }
+          });
+
+          console.log('Call started with result:', result);
+
+          // Store the instance globally
+          (window as any).__VAPI_INSTANCE__ = vapiInstance;
+        } catch (error) {
+          console.error('Error with direct Vapi integration:', error);
+
+          // Fall back to our wrapper
+          console.log('Falling back to enhanced call wrapper...');
+          await startEnhancedCall(
+            process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID,
+            {
+              variableValues: {
+                username: userName || 'User',
+                userid: userId || 'anonymous',
+              }
+            }
+          );
+        }
+
+        console.log('Call initialization completed');
       } catch (error) {
         console.error('Failed to start call:', error);
-        setErrorMessage(`Failed to start call: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+        // Reset the Vapi instance to clean up
+        try {
+          resetVapiInstance();
+        } catch (resetError) {
+          console.warn('Error resetting Vapi instance:', resetError);
+        }
+
+        // Update UI
+        setErrorMessage(`Failed to start interview: ${error instanceof Error ? error.message : 'Unknown error'}`);
         setCallStatus(CallStatus.INACTIVE);
         setShowAudioTroubleshooter(true);
-        toast.error('Failed to start the interview. Please check your audio settings.');
+
+        // Show a user-friendly error message
+        toast.error('Failed to start the interview. Please try again later.');
+
+        // Redirect to dashboard after a delay
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 3000);
       }
     };
 

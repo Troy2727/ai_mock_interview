@@ -927,6 +927,3 @@ export class MockVapi {
     }
   }
 }
-
-// Export the MockVapi class
-export { MockVapi };

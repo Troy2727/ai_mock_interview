@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, useRef } from 'react';
 import { toast } from 'sonner';
 import { isEjected, isHandlingEjection, setEjectionState } from '@/lib/vapi/ejection-state';
+import { resetVapiInstance } from '@/lib/vapi';
 
 interface EjectionErrorHandlerProps {
   children: React.ReactNode;
@@ -103,6 +104,20 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
 
     // Create a more aggressive error handler for window.onerror
     window.onerror = (message, source, lineno, colno, error) => {
+      // Skip React internal errors
+      if (typeof message === 'string' && (
+          message.includes('react-stack-top-frame') ||
+          message.includes('react-internal') ||
+          message.includes('Minified React error') ||
+          message.includes('Check the render method')
+      )) {
+        // Let React handle its own errors
+        if (originalOnError) {
+          return originalOnError(message, source, lineno, colno, error);
+        }
+        return false;
+      }
+
       // Check if this is an ejection error
       if (typeof message === 'string' && handleEjectionError(message)) {
         console.log('Caught ejection error in window.onerror');
@@ -119,6 +134,18 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
 
     // Override console.error to catch ejection errors
     console.error = function(...args) {
+      // Skip React internal errors
+      if (args.length > 0 && typeof args[0] === 'string' && (
+          args[0].includes('react-stack-top-frame') ||
+          args[0].includes('react-internal') ||
+          args[0].includes('Minified React error') ||
+          args[0].includes('Check the render method')
+      )) {
+        // Just pass through to original handler
+        originalConsoleError.apply(console, args);
+        return;
+      }
+
       // Call the original console.error
       originalConsoleError.apply(console, args);
 
@@ -133,6 +160,17 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
     // Add unhandled promise rejection handler
     const unhandledRejectionHandler = (event: PromiseRejectionEvent) => {
       const errorMessage = event.reason?.message || String(event.reason);
+
+      // Skip React internal errors
+      if (typeof errorMessage === 'string' && (
+          errorMessage.includes('react-stack-top-frame') ||
+          errorMessage.includes('react-internal') ||
+          errorMessage.includes('Minified React error') ||
+          errorMessage.includes('Check the render method')
+      )) {
+        return; // Let React handle its own errors
+      }
+
       if (handleEjectionError(errorMessage)) {
         console.log('Caught ejection error in unhandledrejection');
         event.preventDefault();
@@ -141,6 +179,16 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
 
     // Add error event listener
     const errorHandler = (event: ErrorEvent) => {
+      // Skip React internal errors
+      if (typeof event.message === 'string' && (
+          event.message.includes('react-stack-top-frame') ||
+          event.message.includes('react-internal') ||
+          event.message.includes('Minified React error') ||
+          event.message.includes('Check the render method')
+      )) {
+        return; // Let React handle its own errors
+      }
+
       if (handleEjectionError(event.message)) {
         console.log('Caught ejection error in error event');
         event.preventDefault();
@@ -154,8 +202,29 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
       // Create a proper error object
       const error = new OriginalError(message || '');
 
-      // Log all error creations for debugging
-      console.log('Error created:', message || '(empty error)');
+      // Only log non-React errors to reduce console noise
+      if (message &&
+          !message.includes('react-stack-top-frame') &&
+          !message.includes('react-internal')) {
+        console.log('Error created:', message);
+      }
+
+      // Skip React internal errors completely
+      if (message && (
+          message.includes('react-stack-top-frame') ||
+          message.includes('react-internal') ||
+          message.includes('Minified React error') ||
+          message.includes('Check the render method')
+      )) {
+        return error;
+      }
+
+      // Handle speech synthesis errors specially
+      if (message && message.includes('Speech error')) {
+        console.log('Speech synthesis error detected, not treating as ejection');
+        // Don't trigger ejection handling for speech errors
+        return error;
+      }
 
       // Check for ejection errors
       if (message &&
@@ -170,6 +239,15 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
         // Handle empty error messages which might be from Vapi
         console.log('Empty or invalid error detected, might be from Vapi:', message);
 
+        // Don't treat empty errors as ejection errors during initialization
+        // This prevents false positives during the Vapi setup phase
+        const isInitializing = !document.querySelector('[data-vapi-initialized="true"]');
+
+        if (isInitializing) {
+          console.log('Ignoring empty error during initialization phase');
+          return error;
+        }
+
         // Check if this is during a Vapi call
         if (typeof window !== 'undefined' && (window as any).__VAPI_INSTANCE__) {
           console.log('Error during Vapi call, treating as connection issue');
@@ -179,9 +257,11 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
             const vapiInstance = (window as any).__VAPI_INSTANCE__;
             if (vapiInstance && typeof vapiInstance.stop === 'function') {
               console.log('Attempting to stop Vapi instance after error');
-              vapiInstance.stop().catch((stopError: any) => {
+              try {
+                vapiInstance.stop();
+              } catch (stopError) {
                 console.warn('Error stopping Vapi instance:', stopError);
-              });
+              }
             }
 
             // Reset the Vapi instance
@@ -194,11 +274,14 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
             console.warn('Error cleaning up Vapi instance:', cleanupError);
           }
 
-          setTimeout(() => {
-            // Redirect to dashboard with a more helpful message
-            toast.error('Connection issue with the interview service. Please try again later.');
-            router.push('/dashboard');
-          }, 0);
+          // Only redirect if we're not in the initialization phase
+          if (!isInitializing) {
+            setTimeout(() => {
+              // Redirect to dashboard with a more helpful message
+              toast.error('Connection issue with the interview service. Please try again later.');
+              router.push('/dashboard');
+            }, 0);
+          }
         }
       }
 

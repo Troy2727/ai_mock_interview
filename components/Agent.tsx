@@ -84,7 +84,14 @@ const Agent = ({userName, userId, type}: AgentProps) => {
 
       // Clean up Vapi instance when component unmounts
       return () => {
+        // Reset Vapi instance
         resetVapiInstance();
+
+        // Remove the Vapi initialization marker
+        const marker = document.querySelector('[data-vapi-initialized="true"]');
+        if (marker && marker.parentNode) {
+          marker.parentNode.removeChild(marker);
+        }
       };
     }, []);
 
@@ -189,15 +196,67 @@ const Agent = ({userName, userId, type}: AgentProps) => {
         // 2. Set up event handlers
         // 3. Start the call
 
-        // Create a new Vapi instance directly (not using our wrapper)
+        // Use our wrapper to get a Vapi instance (which will use the mock in development)
         try {
-          // Import Vapi dynamically to ensure it's loaded in the browser
-          const Vapi = (await import('@vapi-ai/web')).default;
-          const vapiInstance = new Vapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
+          // Log the current domain for debugging
+          console.log('Current domain:', window.location.hostname);
 
-          // Set up event handlers
+          // Get a Vapi instance from our wrapper
+          console.log('Getting Vapi instance from wrapper...');
+          const vapiInstance = getVapiInstance({
+            onError: (error) => {
+              console.error('Vapi error:', error);
+              setErrorMessage(`Audio error: ${error.message}`);
+            },
+            onConnectionLost: () => {
+              console.warn('Connection lost');
+              setErrorMessage('Connection lost. Attempting to reconnect...');
+            },
+            onReconnectSuccess: () => {
+              console.log('Reconnected successfully');
+              setErrorMessage(null);
+            },
+            onEjection: () => {
+              console.warn('Meeting ejection detected');
+              setErrorMessage('Meeting ended unexpectedly.');
+            }
+          });
+          console.log('Vapi instance obtained successfully');
+
+          // Set up event handlers with improved error handling
           vapiInstance.on('error', (error: any) => {
             console.error('Vapi error:', error);
+
+            // Log detailed error information
+            console.log('Error details:', {
+              message: error?.message || 'Unknown error',
+              name: error?.name,
+              code: error?.code,
+              stack: error?.stack,
+              toString: String(error)
+            });
+
+            // Check for specific error types
+            const errorStr = String(error);
+
+            if (errorStr.includes('unauthorized') || errorStr.includes('domain')) {
+              const domainError = `Domain authorization error: Please add ${window.location.hostname} to your Vapi authorized domains`;
+              console.error(domainError);
+              setErrorMessage(domainError);
+              toast.error(domainError);
+              return;
+            }
+
+            if (errorStr.includes('microphone') || errorStr.includes('audio') || errorStr.includes('permission')) {
+              const micError = 'Microphone access is required. Please grant microphone permissions.';
+              console.error(micError);
+              setErrorMessage(micError);
+              setShowAudioTroubleshooter(true);
+              toast.error(micError);
+              return;
+            }
+
+            // Default error message
             setErrorMessage(`Audio error: ${error instanceof Error ? error.message : String(error)}`);
           });
 
@@ -212,25 +271,98 @@ const Agent = ({userName, userId, type}: AgentProps) => {
             setCallStatus(CallStatus.INACTIVE);
           });
 
-          // Start the call
-          const result = await vapiInstance.start(process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID, {
-            variableValues: {
-              username: userName || 'User',
-              userid: userId || 'anonymous',
-            }
-          });
-
-          console.log('Call started with result:', result);
-
-          // Store the instance globally
+          // Store the instance globally before starting the call
+          console.log('Storing Vapi instance globally');
           (window as any).__VAPI_INSTANCE__ = vapiInstance;
+
+          // Add a marker to the DOM to indicate Vapi is initialized
+          // This helps the EjectionErrorHandler distinguish between initialization errors and real errors
+          const marker = document.createElement('div');
+          marker.style.display = 'none';
+          marker.setAttribute('data-vapi-initialized', 'true');
+          document.body.appendChild(marker);
+
+          // Start the call with better error handling
+          console.log('Starting Vapi call...');
+          try {
+            // Make sure we have a valid workflow ID
+            const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
+            if (!workflowId) {
+              throw new Error('Missing workflow ID');
+            }
+
+            console.log('Using workflow ID:', workflowId);
+
+            // Create a proper assistant configuration object
+            const assistantConfig = {
+              // Use the workflow ID directly as a string
+              workflowId: workflowId,
+              // Set variable values
+              variableValues: {
+                username: userName || 'User',
+                userid: userId || 'anonymous',
+              }
+            };
+
+            console.log('Starting call with config:', JSON.stringify(assistantConfig));
+
+            // Start the call with the proper configuration
+            // Make sure to pass the workflow ID as a string, not an object
+            const workflowIdStr = String(workflowId);
+            console.log('Using workflow ID as string:', workflowIdStr);
+
+            const result = await vapiInstance.start(workflowIdStr, {
+              variableValues: {
+                username: userName || 'User',
+                userid: userId || 'anonymous',
+              }
+            });
+
+            console.log('Call started with result:', result);
+          } catch (startError) {
+            console.error('Error starting Vapi call:', startError);
+
+            // Check for specific error types
+            const errorStr = String(startError);
+
+            if (errorStr.includes('unauthorized') || errorStr.includes('domain')) {
+              throw new Error(`Domain authorization error: Please add ${window.location.hostname} to your Vapi authorized domains`);
+            }
+
+            if (errorStr.includes('microphone') || errorStr.includes('audio') || errorStr.includes('permission')) {
+              setShowAudioTroubleshooter(true);
+              throw new Error('Microphone access is required. Please grant microphone permissions and try again.');
+            }
+
+            // Check for 404 errors which might indicate URL construction issues
+            if (errorStr.includes('404') || errorStr.includes('Not Found')) {
+              throw new Error('API endpoint not found. This might be due to an incorrect workflow ID or API configuration.');
+            }
+
+            // Re-throw with more context
+            throw new Error(`Failed to start Vapi call: ${startError instanceof Error ? startError.message : String(startError)}`);
+          }
         } catch (error) {
           console.error('Error with direct Vapi integration:', error);
 
           // Fall back to our wrapper
           console.log('Falling back to enhanced call wrapper...');
+
+          // Make sure we have a valid workflow ID
+          const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
+          if (!workflowId) {
+            throw new Error('Missing workflow ID in fallback method');
+          }
+
+          console.log('Using workflow ID in fallback:', workflowId);
+
+          // Make sure to use the workflow ID as a string
+          const workflowIdStr = String(workflowId);
+          console.log('Using workflow ID as string in fallback:', workflowIdStr);
+
+          // Use the string workflow ID directly
           await startEnhancedCall(
-            process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID,
+            workflowIdStr,
             {
               variableValues: {
                 username: userName || 'User',
@@ -251,18 +383,36 @@ const Agent = ({userName, userId, type}: AgentProps) => {
           console.warn('Error resetting Vapi instance:', resetError);
         }
 
+        // Check for specific error types
+        const errorStr = String(error);
+        let errorMessage = `Failed to start interview: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        let shouldRedirect = true;
+
+        if (errorStr.includes('unauthorized') || errorStr.includes('domain')) {
+          errorMessage = `Domain authorization error: Please add ${window.location.hostname} to your Vapi authorized domains list in the Vapi dashboard.`;
+          // Don't redirect for domain errors - let the user see the message
+          shouldRedirect = false;
+        } else if (errorStr.includes('microphone') || errorStr.includes('audio') || errorStr.includes('permission')) {
+          errorMessage = 'Microphone access is required for the interview. Please grant microphone permissions and try again.';
+          // Don't redirect for permission errors - let the user fix it
+          shouldRedirect = false;
+        }
+
         // Update UI
-        setErrorMessage(`Failed to start interview: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        setErrorMessage(errorMessage);
         setCallStatus(CallStatus.INACTIVE);
         setShowAudioTroubleshooter(true);
 
         // Show a user-friendly error message
-        toast.error('Failed to start the interview. Please try again later.');
+        toast.error(errorMessage);
 
-        // Redirect to dashboard after a delay
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 3000);
+        // Only redirect for certain errors
+        if (shouldRedirect) {
+          // Redirect to dashboard after a delay
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 5000);
+        }
       }
     };
 

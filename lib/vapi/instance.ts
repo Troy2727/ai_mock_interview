@@ -1,11 +1,22 @@
 /**
  * Vapi instance management
  */
-// Import the real Vapi SDK
-import Vapi from '@vapi-ai/web';
+// Import the real Vapi SDK (for type checking)
+import OriginalVapi from '@vapi-ai/web';
+
+// Import our custom Vapi implementation that fixes URL construction issues
+import CustomVapi from './custom-vapi';
 
 // Import our mock implementation (for fallback)
 import { MockVapi } from './mock';
+
+// Configuration flag to force using the mock implementation
+// Set this to true to always use the mock implementation, even in production
+const FORCE_MOCK_VAPI = false; // Set to false to use the real Vapi implementation
+
+// Configuration flag to force using the real implementation
+// Set this to true to always use the real implementation, even in development
+const FORCE_REAL_VAPI = false;
 
 import { connectionState, setupConnectionMonitoring, startKeepAlive, stopKeepAlive } from './connection';
 import { handleConnectionLost, handleEjectionError } from './error-handling';
@@ -62,21 +73,127 @@ export function getVapiInstance(options?: {
       console.warn('No VAPI_WEB_TOKEN found, using mock implementation');
       vapiInstance = new MockVapi('mock-token');
     }
-    // Try to create a real Vapi instance
-    else {
+    // Check if we should force using the mock implementation
+    else if (FORCE_MOCK_VAPI) {
+      console.log('FORCE_MOCK_VAPI is enabled, using mock implementation');
+      vapiInstance = new MockVapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
+    }
+    // Check if we should force using the real implementation
+    else if (FORCE_REAL_VAPI) {
+      console.log('FORCE_REAL_VAPI is enabled, using real implementation');
+
       try {
         console.log('Creating real Vapi instance with token:',
           process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN.substring(0, 5) + '...');
 
-        // Create the real Vapi instance with proper error handling
-        vapiInstance = new Vapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
+        // Log the current domain for debugging
+        console.log('Current domain:', window.location.hostname);
+
+        // Create options for Vapi initialization
+        const vapiOptions = {
+          debug: true // Enable debug mode for better logging
+        };
+
+        // Create our custom Vapi instance with proper error handling
+        vapiInstance = new CustomVapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN, vapiOptions);
+      } catch (error) {
+        console.error('Error creating real Vapi instance, falling back to mock:', error);
+        vapiInstance = new MockVapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
+      }
+    }
+    // Check if we're in development mode
+    else if (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1'
+    ) {
+      // In development, always use the mock implementation to avoid API issues
+      console.log('Development environment detected, using mock implementation');
+      console.log('This prevents issues with the Vapi API during local development');
+
+      // Create a mock instance with the real token for testing
+      vapiInstance = new MockVapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
+    }
+    // For production, use the real Vapi instance
+    else {
+      try {
+        console.log('Production environment detected, creating real Vapi instance');
+        console.log('Creating real Vapi instance with token:',
+          process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN.substring(0, 5) + '...');
+
+        // Log the current domain for debugging
+        console.log('Current domain:', window.location.hostname);
+
+        // Create options for Vapi initialization
+        const vapiOptions = {
+          debug: true // Enable debug mode for better logging
+        };
+
+        // Create our custom Vapi instance with proper error handling
+        // This uses our wrapper that fixes URL construction issues
+        vapiInstance = new CustomVapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN, vapiOptions);
         console.log('Real Vapi instance created successfully');
 
         // Set up all event handlers according to documentation
         if (typeof vapiInstance.on === 'function') {
-          // Error handler
+          // Error handler with improved logging
           vapiInstance.on('error', (error: any) => {
             console.error('Vapi instance error event:', error);
+
+            // Skip empty errors during initialization
+            if (!error || error === {} || String(error) === '{}' || String(error) === '[object Object]') {
+              console.log('Ignoring empty error during Vapi initialization');
+              return;
+            }
+
+            // Log detailed error information
+            console.log('Error details:', {
+              message: error?.message || 'Unknown error',
+              name: error?.name,
+              code: error?.code,
+              stack: error?.stack,
+              toString: String(error)
+            });
+
+            // Check for specific error types
+            if (error?.message?.includes('unauthorized') ||
+                error?.message?.includes('domain') ||
+                error?.code === 'unauthorized-domain') {
+              console.error('Domain authorization error detected. Please add this domain to your Vapi authorized domains list.');
+
+              // Show a more helpful error message in the console
+              console.info(`
+                =====================================================
+                VAPI DOMAIN AUTHORIZATION ERROR
+                =====================================================
+                Please add the following domain to your Vapi dashboard:
+                ${window.location.hostname}
+
+                If you're using Vapi with Firebase, also make sure to add
+                this domain to your Firebase authorized domains list.
+                =====================================================
+              `);
+
+              // Call onError with a more specific error
+              if (options?.onError) {
+                options.onError(new Error(`Domain authorization error: Please add ${window.location.hostname} to your Vapi authorized domains`));
+              }
+              return;
+            }
+
+            // Handle microphone permission errors
+            if (error?.message?.includes('microphone') ||
+                error?.message?.includes('audio') ||
+                error?.message?.includes('permission')) {
+              console.error('Microphone permission error detected');
+
+              // Call onError with a more specific error
+              if (options?.onError) {
+                options.onError(new Error('Microphone access is required. Please grant microphone permissions and try again.'));
+              }
+              return;
+            }
+
+            // Default error handling
             if (options?.onError) {
               options.onError(error instanceof Error ? error : new Error(String(error)));
             }

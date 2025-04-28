@@ -32,7 +32,12 @@ export function handleEjectionError(error?: Error): void {
     });
   }
 
-  console.warn('Vapi meeting ejection detected:', error);
+  // Ensure we have a proper error object
+  const ejectionError = error instanceof Error
+    ? error
+    : new Error(error ? String(error) : 'Meeting ejection detected');
+
+  console.warn('Vapi meeting ejection detected:', ejectionError.message);
 
   // Mark the connection as inactive immediately
   connectionState.isConnected = false;
@@ -43,7 +48,8 @@ export function handleEjectionError(error?: Error): void {
   // Notify about ejection
   if (connectionState.onEjection) {
     try {
-      connectionState.onEjection(error);
+      // Use our properly formatted error object
+      connectionState.onEjection(ejectionError);
     } catch (notifyError) {
       console.error('Error in ejection notification callback:', notifyError);
     }
@@ -130,14 +136,19 @@ export function handleEjectionError(error?: Error): void {
  * @param error Optional error that caused the connection loss
  */
 export function handleConnectionLost(error?: Error): void {
-  console.warn('Vapi connection lost', error);
+  // Ensure we have a proper error object
+  const connectionError = error instanceof Error
+    ? error
+    : new Error(error ? String(error) : 'Connection lost');
+
+  console.warn('Vapi connection lost:', connectionError.message);
 
   // Stop keep-alive and connection monitoring
   stopKeepAlive();
 
   // Notify connection lost
   if (connectionState.onConnectionLost) {
-    connectionState.onConnectionLost(error);
+    connectionState.onConnectionLost(connectionError);
   }
 
   // Attempt to reconnect if we have call config

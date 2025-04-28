@@ -84,8 +84,8 @@ const MOCK_WORKFLOWS: Record<string, InterviewWorkflow> = {
     name: 'Interview Preparation',
     description: 'An interview preparation workflow based on jimaestro_interview_prep',
     introduction: [
-      "Hello! I'm your AI interview coach. I'll be asking you some questions today to help you prepare for your upcoming interviews.",
-      "This session will help you practice your responses and get comfortable with common interview questions."
+      "Hello! I'm Connor, your AI interview coach. I'll be asking you some questions today to help you prepare for your upcoming interviews.",
+      "This session will help you practice your responses and get comfortable with common interview questions. Let's get started!"
     ],
     questions: [
       {
@@ -153,7 +153,7 @@ export class MockVapi {
   private speechSynthesis: SpeechSynthesis | null = null;
   private speechUtterance: SpeechSynthesisUtterance | null = null;
   private audioContext: AudioContext | null = null;
-  // No speech synthesis or audio context properties
+  private activeTimeouts: number[] = []; // Store active timeout IDs for cleanup
 
   // Workflow simulation properties
   private currentWorkflow: InterviewWorkflow | null = null;
@@ -177,11 +177,39 @@ export class MockVapi {
           this.speechSynthesis = window.speechSynthesis;
           console.log('MockVapi: Speech synthesis initialized');
 
+          // Create a default utterance with good settings
+          this.speechUtterance = new SpeechSynthesisUtterance();
+          this.speechUtterance.rate = 1.0;  // Normal speed
+          this.speechUtterance.pitch = 1.0; // Normal pitch
+          this.speechUtterance.volume = 1.0; // Full volume
+          this.speechUtterance.lang = 'en-US'; // English
+
           // Pre-load voices to avoid issues (some browsers need this)
           if (window.speechSynthesis.onvoiceschanged !== undefined) {
             window.speechSynthesis.onvoiceschanged = () => {
               const voices = window.speechSynthesis.getVoices();
               console.log(`MockVapi: ${voices.length} voices loaded for speech synthesis`);
+
+              // Try to select a good voice
+              if (voices && voices.length > 0) {
+                // Try to find a male English voice for Connor
+                const maleVoices = voices.filter(v =>
+                  v.lang && v.lang.startsWith('en-') &&
+                  (!v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('male'))
+                );
+
+                if (maleVoices.length > 0) {
+                  this.speechUtterance.voice = maleVoices[0];
+                  console.log(`MockVapi: Selected voice: ${maleVoices[0].name}`);
+                } else {
+                  // Fall back to any English voice
+                  const englishVoices = voices.filter(v => v.lang && v.lang.startsWith('en-'));
+                  if (englishVoices.length > 0) {
+                    this.speechUtterance.voice = englishVoices[0];
+                    console.log(`MockVapi: Selected voice: ${englishVoices[0].name}`);
+                  }
+                }
+              }
             };
           }
 
@@ -191,6 +219,25 @@ export class MockVapi {
               const voices = window.speechSynthesis.getVoices();
               if (voices && voices.length > 0) {
                 console.log(`MockVapi: ${voices.length} voices available immediately`);
+
+                // Try to select a good voice
+                // Try to find a male English voice for Connor
+                const maleVoices = voices.filter(v =>
+                  v.lang && v.lang.startsWith('en-') &&
+                  (!v.name.toLowerCase().includes('female') || v.name.toLowerCase().includes('male'))
+                );
+
+                if (maleVoices.length > 0) {
+                  this.speechUtterance.voice = maleVoices[0];
+                  console.log(`MockVapi: Selected voice: ${maleVoices[0].name}`);
+                } else {
+                  // Fall back to any English voice
+                  const englishVoices = voices.filter(v => v.lang && v.lang.startsWith('en-'));
+                  if (englishVoices.length > 0) {
+                    this.speechUtterance.voice = englishVoices[0];
+                    console.log(`MockVapi: Selected voice: ${englishVoices[0].name}`);
+                  }
+                }
               } else {
                 console.log('MockVapi: No voices available immediately, will try again when voices change');
               }
@@ -232,6 +279,13 @@ export class MockVapi {
    * @param onEnd Callback when speech ends
    */
   private simulateSpeech(text: string, onStart?: () => void, onEnd?: () => void): void {
+    // Check if the call is still connected before speaking
+    if (!this.isConnected) {
+      console.log('MockVapi: Call is not connected, not speaking');
+      if (onEnd) onEnd();
+      return;
+    }
+
     // If speech synthesis is not available, fall back to a timer-based approach
     if (!this.speechSynthesis || typeof window === 'undefined') {
       console.warn('MockVapi: Speech synthesis not available, using timer-based simulation');
@@ -245,11 +299,23 @@ export class MockVapi {
       const durationMs = Math.max(1000, wordsCount * 200); // At least 1 second, ~200ms per word
 
       // Simulate speech end after the calculated duration
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
+        // Check again if the call is still connected
+        if (!this.isConnected) {
+          console.log('MockVapi: Call disconnected during speech simulation');
+          this.isSimulatingAudio = false;
+          if (onEnd) onEnd();
+          return;
+        }
+
         console.log('MockVapi: Simulated speech ended after', durationMs, 'ms');
         this.isSimulatingAudio = false;
         if (onEnd) onEnd();
       }, durationMs);
+
+      // Store the timeout ID so it can be cleared if needed
+      this.activeTimeouts = this.activeTimeouts || [];
+      this.activeTimeouts.push(timeoutId);
 
       return;
     }
@@ -393,11 +459,15 @@ export class MockVapi {
     console.log(`MockVapi: Simulating speech for ${durationMs}ms`);
 
     // End the speech after the calculated duration
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       console.log('MockVapi: Timer-based simulation ended');
       this.isSimulatingAudio = false;
       if (onEnd) onEnd();
     }, durationMs);
+
+    // Store the timeout ID so it can be cleared if needed
+    this.activeTimeouts = this.activeTimeouts || [];
+    this.activeTimeouts.push(timeoutId);
   }
 
   // Basic methods
@@ -424,24 +494,48 @@ export class MockVapi {
       this.currentWorkflow = MOCK_WORKFLOWS[workflowId] || MOCK_WORKFLOWS['default'];
       console.log(`MockVapi: Using workflow "${this.currentWorkflow.name}" (${this.currentWorkflow.id})`);
 
-      // Reset workflow state
-      this.isInIntroduction = true;
-      this.isInConclusion = false;
-      this.introductionIndex = 0;
-      this.currentQuestionIndex = 0;
-      this.currentFollowUpIndex = 0;
+      // Only reset workflow state if we're starting a new interview
+      // or if we've reached the conclusion
+      if (!this.currentWorkflow || this.isInConclusion) {
+        console.log('MockVapi: Starting a new interview from the beginning');
+        this.isInIntroduction = true;
+        this.isInConclusion = false;
+        this.introductionIndex = 0;
+        this.currentQuestionIndex = 0;
+        this.currentFollowUpIndex = 0;
+      } else {
+        // Continue from where we left off
+        console.log('MockVapi: Continuing interview from current position');
+        console.log(`MockVapi: Current state - Question: ${this.currentQuestionIndex}, FollowUp: ${this.currentFollowUpIndex}`);
+      }
 
       // Return immediately with a promise that will resolve
       const result = { id: 'mock-call-id', status: 'connected' };
 
       // Use setTimeout to simulate async events after returning
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         this.isConnected = true;
         this.emit('call-start');
 
-        // Start the introduction sequence
+        // If we're continuing from a previous point, log the current position
+        if (!this.isInIntroduction && !this.isInConclusion) {
+          console.log('MockVapi: Resuming interview from previous position');
+          console.log(`MockVapi: Resuming at question ${this.currentQuestionIndex + 1} of ${this.currentWorkflow?.questions.length}`);
+
+          // If we're in the middle of follow-ups, log that too
+          if (this.currentFollowUpIndex > 0) {
+            console.log(`MockVapi: Resuming at follow-up ${this.currentFollowUpIndex} of question ${this.currentQuestionIndex + 1}`);
+          }
+        } else {
+          console.log('MockVapi: Starting interview from the beginning');
+        }
+
+        // Continue the workflow from wherever we are
         this.continueWorkflow();
       }, 1500);
+
+      // Store the timeout ID
+      this.activeTimeouts.push(timeoutId);
 
       return result;
     } catch (error) {
@@ -480,7 +574,10 @@ export class MockVapi {
           }
 
           // Continue the workflow after a short delay
-          setTimeout(() => this.continueWorkflow(), 1000);
+          const timeoutId = setTimeout(() => this.continueWorkflow(), 1000);
+
+          // Store the timeout ID
+          this.activeTimeouts.push(timeoutId);
         });
       }
     }
@@ -500,7 +597,8 @@ export class MockVapi {
 
           // Continue the workflow after a short delay if there are more conclusion messages
           if (this.conclusionIndex < this.currentWorkflow.conclusion.length) {
-            setTimeout(() => this.continueWorkflow(), 1000);
+            const timeoutId = setTimeout(() => this.continueWorkflow(), 1000);
+            this.activeTimeouts.push(timeoutId);
           }
         });
       }
@@ -541,7 +639,8 @@ export class MockVapi {
           }
 
           // Continue the workflow after a short delay
-          setTimeout(() => this.continueWorkflow(), 1000);
+          const timeoutId = setTimeout(() => this.continueWorkflow(), 1000);
+          this.activeTimeouts.push(timeoutId);
         }
       }
     }
@@ -586,14 +685,51 @@ export class MockVapi {
   async stop(): Promise<void> {
     console.log('MockVapi: Stopping call...');
 
-    // Stop any ongoing speech synthesis
+    // Immediately set flags to prevent any new speech
+    this.isConnected = false;
+    this.isSimulatingAudio = false;
+
+    // Note: We're intentionally NOT resetting the workflow state here
+    // This allows the interview to continue from where it left off when restarted
+    console.log('MockVapi: Preserving workflow state for continuation');
+    console.log(`MockVapi: Current state - Question: ${this.currentQuestionIndex}, FollowUp: ${this.currentFollowUpIndex}`);
+
+    // Cancel any ongoing speech synthesis
     if (this.speechSynthesis) {
       try {
+        // Cancel any ongoing speech
         this.speechSynthesis.cancel();
         console.log('MockVapi: Speech synthesis cancelled');
+
+        // Also try to pause it (some browsers handle this differently)
+        try {
+          this.speechSynthesis.pause();
+        } catch (pauseError) {
+          // Ignore pause errors
+        }
       } catch (error) {
         console.warn('MockVapi: Error cancelling speech synthesis');
       }
+    }
+
+    // Clear any active timeouts that we've stored
+    if (this.activeTimeouts && this.activeTimeouts.length > 0) {
+      console.log(`MockVapi: Clearing ${this.activeTimeouts.length} active timeouts`);
+      this.activeTimeouts.forEach(timeoutId => {
+        clearTimeout(timeoutId);
+      });
+      this.activeTimeouts = [];
+    }
+
+    // Also try to clear any other timeouts that might be related to the workflow
+    // This is a more aggressive approach to ensure all speech stops
+    if (typeof window !== 'undefined') {
+      // This is a hack to clear all timeouts
+      const highestTimeoutId = setTimeout(() => {}, 0);
+      for (let i = 0; i < highestTimeoutId; i++) {
+        clearTimeout(i);
+      }
+      console.log('MockVapi: Cleared all pending timeouts');
     }
 
     // Stop any ongoing audio context
@@ -606,15 +742,9 @@ export class MockVapi {
       }
     }
 
-    if (this.isConnected) {
-      this.isConnected = false;
-      this.isSimulatingAudio = false;
-
-      // Simulate a call end
-      setTimeout(() => {
-        this.emit('call-end');
-      }, 500);
-    }
+    // Emit call-end event immediately
+    this.emit('call-end');
+    console.log('MockVapi: Call ended');
   }
 
   send(message: Record<string, unknown>): void {

@@ -12,11 +12,11 @@ import { MockVapi } from './mock';
 
 // Configuration flag to force using the mock implementation
 // Set this to true to always use the mock implementation, even in production
-const FORCE_MOCK_VAPI = false; // Set to false to use the real Vapi implementation
+const FORCE_MOCK_VAPI = true; // Set to true to use the mock implementation
 
 // Configuration flag to force using the real implementation
 // Set this to true to always use the real implementation, even in development
-const FORCE_REAL_VAPI = false;
+const FORCE_REAL_VAPI = false; // Set to false to avoid using the real Vapi implementation
 
 import { connectionState, setupConnectionMonitoring, startKeepAlive, stopKeepAlive } from './connection';
 import { handleConnectionLost, handleEjectionError } from './error-handling';

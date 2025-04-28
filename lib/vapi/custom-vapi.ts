@@ -18,7 +18,7 @@ export class CustomVapi {
     console.log('CustomVapi: Initializing with token', token);
     this.token = token;
     this.options = options || {};
-    
+
     // Create the original Vapi instance
     try {
       this.originalVapi = new OriginalVapi(token, options);
@@ -37,32 +37,32 @@ export class CustomVapi {
    */
   async start(workflowIdOrAssistant: string | Record<string, unknown>, options?: any): Promise<any> {
     console.log('CustomVapi: Starting call with', { workflowIdOrAssistant, options });
-    
+
     try {
       // If workflowIdOrAssistant is a string, use it directly
       if (typeof workflowIdOrAssistant === 'string') {
         console.log('CustomVapi: Using workflow ID directly:', workflowIdOrAssistant);
-        
+
         // Call the original Vapi start method with the string workflow ID
         const result = await this.originalVapi.start(workflowIdOrAssistant, options);
         console.log('CustomVapi: Call started successfully with result', result);
         return result;
       }
-      
+
       // If workflowIdOrAssistant is an object, extract the workflowId
       if (typeof workflowIdOrAssistant === 'object' && workflowIdOrAssistant !== null) {
         console.log('CustomVapi: Extracting workflow ID from object');
-        
+
         // Extract the workflowId from the object
         const workflowId = (workflowIdOrAssistant as any).workflowId;
-        
+
         if (!workflowId || typeof workflowId !== 'string') {
           console.error('CustomVapi: Invalid workflow ID in object', workflowIdOrAssistant);
           throw new Error('Invalid workflow ID in object');
         }
-        
+
         console.log('CustomVapi: Extracted workflow ID:', workflowId);
-        
+
         // Merge the options
         const mergedOptions = {
           ...options,
@@ -71,25 +71,33 @@ export class CustomVapi {
             ...(workflowIdOrAssistant as any).variableValues || {},
           }
         };
-        
+
         console.log('CustomVapi: Using merged options', mergedOptions);
-        
+
         // Call the original Vapi start method with the extracted workflow ID
         const result = await this.originalVapi.start(workflowId, mergedOptions);
         console.log('CustomVapi: Call started successfully with result', result);
         return result;
       }
-      
+
       // If workflowIdOrAssistant is neither a string nor an object, throw an error
       console.error('CustomVapi: Invalid workflow ID or assistant config', workflowIdOrAssistant);
       throw new Error('Invalid workflow ID or assistant config');
     } catch (error) {
       console.error('CustomVapi: Error starting call', error);
-      
-      // Emit an error event
-      this.emit('error', error);
-      
-      throw error;
+
+      // Create a proper error object if it's not already one
+      const errorObj = error instanceof Error
+        ? error
+        : new Error(error ? String(error) : 'Unknown error starting Vapi call');
+
+      // Add additional context to the error
+      errorObj.name = 'VapiStartError';
+
+      // Emit an error event with the proper error object
+      this.emit('error', errorObj);
+
+      throw errorObj;
     }
   }
 
@@ -98,7 +106,7 @@ export class CustomVapi {
    */
   async stop(): Promise<void> {
     console.log('CustomVapi: Stopping call');
-    
+
     try {
       await this.originalVapi.stop();
       console.log('CustomVapi: Call stopped successfully');
@@ -114,7 +122,7 @@ export class CustomVapi {
    */
   send(message: any): void {
     console.log('CustomVapi: Sending message', message);
-    
+
     try {
       this.originalVapi.send(message);
       console.log('CustomVapi: Message sent successfully');
@@ -148,10 +156,10 @@ export class CustomVapi {
    */
   on(event: string, handler: (...args: unknown[]) => void): void {
     console.log('CustomVapi: Registering handler for event', event);
-    
+
     // Register the handler with the original Vapi instance
     this.originalVapi.on(event, handler);
-    
+
     // Also store the handler in our own map for reference
     if (!this.eventHandlers[event]) {
       this.eventHandlers[event] = [];
@@ -166,10 +174,10 @@ export class CustomVapi {
    */
   off(event: string, handler: (...args: unknown[]) => void): void {
     console.log('CustomVapi: Unregistering handler for event', event);
-    
+
     // Unregister the handler from the original Vapi instance
     this.originalVapi.off(event, handler);
-    
+
     // Also remove the handler from our own map
     if (this.eventHandlers[event]) {
       this.eventHandlers[event] = this.eventHandlers[event].filter(h => h !== handler);
@@ -181,10 +189,10 @@ export class CustomVapi {
    */
   removeAllListeners(): void {
     console.log('CustomVapi: Removing all listeners');
-    
+
     // Remove all listeners from the original Vapi instance
     this.originalVapi.removeAllListeners();
-    
+
     // Also clear our own map
     this.eventHandlers = {};
   }
@@ -196,7 +204,7 @@ export class CustomVapi {
    */
   private emit(event: string, ...args: unknown[]): void {
     console.log('CustomVapi: Emitting event', event);
-    
+
     // Call all handlers for the event
     if (this.eventHandlers[event]) {
       for (const handler of this.eventHandlers[event]) {

@@ -136,10 +136,12 @@ const Agent = ({userName, userId, type}: AgentProps) => {
     // Handle call status changes
     useEffect(() => {
       if(callStatus === CallStatus.FINISHED) {
-        setIsRedirecting(true); // Trigger loader before navigation
-        router.push('/dashboard');
+        // Instead of redirecting to dashboard, just reset the call status
+        // This allows the user to restart the interview from where they left off
+        console.log('Call finished, resetting call status to INACTIVE');
+        setCallStatus(CallStatus.INACTIVE);
       }
-    }, [callStatus, router]);
+    }, [callStatus]);
 
     const handleCall = async () => {
       try {
@@ -293,29 +295,21 @@ const Agent = ({userName, userId, type}: AgentProps) => {
 
             console.log('Using workflow ID:', workflowId);
 
-            // Create a proper assistant configuration object
-            const assistantConfig = {
-              // Use the workflow ID directly as a string
-              workflowId: workflowId,
-              // Set variable values
-              variableValues: {
-                username: userName || 'User',
-                userid: userId || 'anonymous',
-              }
-            };
-
-            console.log('Starting call with config:', JSON.stringify(assistantConfig));
-
-            // Start the call with the proper configuration
-            // Make sure to pass the workflow ID as a string, not an object
+            // Use the workflow ID directly as a string
             const workflowIdStr = String(workflowId);
             console.log('Using workflow ID as string:', workflowIdStr);
 
+            // Create variable values object
+            const variableValues = {
+              username: userName || 'User',
+              userid: userId || 'anonymous',
+            };
+
+            console.log('Using variable values:', variableValues);
+
+            // Start the call with the workflow ID as a string and the variable values
             const result = await vapiInstance.start(workflowIdStr, {
-              variableValues: {
-                username: userName || 'User',
-                userid: userId || 'anonymous',
-              }
+              variableValues: variableValues
             });
 
             console.log('Call started with result:', result);
@@ -360,14 +354,19 @@ const Agent = ({userName, userId, type}: AgentProps) => {
           const workflowIdStr = String(workflowId);
           console.log('Using workflow ID as string in fallback:', workflowIdStr);
 
+          // Create variable values object
+          const variableValues = {
+            username: userName || 'User',
+            userid: userId || 'anonymous',
+          };
+
+          console.log('Using variable values in fallback:', variableValues);
+
           // Use the string workflow ID directly
           await startEnhancedCall(
             workflowIdStr,
             {
-              variableValues: {
-                username: userName || 'User',
-                userid: userId || 'anonymous',
-              }
+              variableValues: variableValues
             }
           );
         }
@@ -418,12 +417,45 @@ const Agent = ({userName, userId, type}: AgentProps) => {
 
     const handleDisconnect = async () => {
       try {
+        console.log('Disconnecting call...');
+
+        // First update the UI to show the call is finished
         setCallStatus(CallStatus.FINISHED);
-        vapiRef.current.stop();
+
+        // Make sure we have a valid Vapi instance
+        if (!vapiRef.current) {
+          console.warn('No Vapi instance found when trying to disconnect');
+          return;
+        }
+
+        // Stop the call
+        console.log('Stopping Vapi instance...');
+        await vapiRef.current.stop();
+        console.log('Vapi instance stopped successfully');
+
+        // Also reset the Vapi instance to ensure complete cleanup
+        try {
+          console.log('Resetting Vapi instance...');
+          resetVapiInstance();
+          console.log('Vapi instance reset successfully');
+        } catch (resetError) {
+          console.warn('Error resetting Vapi instance:', resetError);
+        }
+
+        // Clear any messages that might be in progress
+        setIsSpeaking(false);
       } catch (error) {
         console.error('Error stopping call:', error);
         // Force the call to be considered finished even if there was an error
         setCallStatus(CallStatus.FINISHED);
+        setIsSpeaking(false);
+
+        // Try to reset the Vapi instance as a last resort
+        try {
+          resetVapiInstance();
+        } catch (resetError) {
+          console.warn('Error resetting Vapi instance during error recovery:', resetError);
+        }
       }
     };
 

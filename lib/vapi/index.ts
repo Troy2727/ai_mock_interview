@@ -110,8 +110,15 @@ export async function startEnhancedCall(
       });
 
       // According to documentation, start() returns a promise that resolves to a call object
-      const result = await vapiInstance.start(callParam, options);
-      console.log('Vapi call started with result:', result);
+      // Make sure we're using the workflow ID as a string
+      if (typeof callParam === 'string') {
+        console.log('Starting call with string workflow ID:', callParam);
+        const result = await vapiInstance.start(callParam, options);
+        console.log('Vapi call started with result:', result);
+      } else {
+        console.error('Invalid workflow ID format. Must be a string.');
+        throw new Error('Invalid workflow ID format. Must be a string.');
+      }
 
       // Update connection state
       connectionState.isConnected = true;

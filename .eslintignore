@@ -1,0 +1,14 @@
+# Ignore build output
+.next/
+out/
+
+# Ignore node_modules
+node_modules/
+
+# Ignore public directory
+public/
+
+# Ignore specific files
+next.config.js
+postcss.config.js
+tailwind.config.js

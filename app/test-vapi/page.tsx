@@ -9,12 +9,12 @@ import { toast } from 'sonner';
 import { checkMicrophonePermission } from '@/lib/audio-utils';
 
 export default function TestVapiPage() {
-  const [userId, setUserId] = useState('test-user-123');
-  const [userName, setUserName] = useState('Test User');
+  const [userId] = useState('test-user-123');
+  const [userName] = useState('Test User');
   const [isCallActive, setIsCallActive] = useState(false);
   const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null);
   const [showAudioSetup, setShowAudioSetup] = useState(false);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [selectedDeviceId] = useState<string | null>(null);
 
   // Check microphone permission on component mount
   useEffect(() => {
@@ -40,7 +40,8 @@ export default function TestVapiPage() {
         return;
       }
 
-      const vapi = getVapiInstance({
+      // Initialize Vapi instance with event handlers
+      getVapiInstance({
         onConnectionLost: () => {
           toast.error('Connection lost');
           setIsCallActive(false);

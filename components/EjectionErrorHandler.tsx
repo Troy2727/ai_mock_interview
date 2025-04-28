@@ -51,12 +51,31 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
       (errorMsg.toLowerCase().includes('meeting ended due to ejection') ||
        errorMsg.toLowerCase().includes('meeting has ended'))
     ) {
-      console.log('EjectionErrorHandler: Detected ejection error, redirecting to dashboard');
+      console.log('EjectionErrorHandler: Detected normal call end signal');
+
+      // Check if this is a normal end of conversation
+      if (errorMsg.includes('assistant-ended-call-with-hangup-task') ||
+          errorMsg.includes('endedReason')) {
+        console.log('This is a normal end of conversation, not an error');
+
+        // Show success toast
+        toast.success('Interview completed successfully!');
+
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 2000);
+
+        return true; // Prevent default error handling
+      }
+
+      // Otherwise, handle as an unexpected ejection
+      console.log('Handling as unexpected ejection, redirecting to dashboard');
       hasRedirectedRef.current = true;
       setIsRedirecting(true);
 
       // Show toast to inform user
-      toast.error('The interview was ended by the system. Redirecting to dashboard...');
+      toast.info('The interview has ended. Redirecting to dashboard...');
 
       try {
         // Try to stop any active Vapi calls
@@ -118,6 +137,23 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
         return false;
       }
 
+      // Check if this is a normal end of conversation
+      if (typeof message === 'string' &&
+          (message.includes('assistant-ended-call-with-hangup-task') ||
+           message.includes('endedReason'))) {
+        console.log('This is a normal end of conversation, not an error');
+
+        // Show success toast
+        toast.success('Interview completed successfully!');
+
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 2000);
+
+        return true; // Prevent default error handling
+      }
+
       // Check if this is an ejection error
       if (typeof message === 'string' && handleEjectionError(message)) {
         console.log('Caught ejection error in window.onerror');
@@ -146,6 +182,26 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
         return;
       }
 
+      // Check if this is a normal end of conversation
+      if (args.length > 0 && typeof args[0] === 'string' &&
+          (args[0].includes('assistant-ended-call-with-hangup-task') ||
+           args[0].includes('endedReason'))) {
+        // Still log the message
+        originalConsoleError.apply(console, args);
+
+        console.log('This is a normal end of conversation, not an error');
+
+        // Show success toast
+        toast.success('Interview completed successfully!');
+
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 2000);
+
+        return;
+      }
+
       // Call the original console.error
       originalConsoleError.apply(console, args);
 
@@ -171,6 +227,24 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
         return; // Let React handle its own errors
       }
 
+      // Check if this is a normal end of conversation
+      if (typeof errorMessage === 'string' &&
+          (errorMessage.includes('assistant-ended-call-with-hangup-task') ||
+           errorMessage.includes('endedReason'))) {
+        console.log('This is a normal end of conversation, not an error');
+
+        // Show success toast
+        toast.success('Interview completed successfully!');
+
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 2000);
+
+        event.preventDefault();
+        return;
+      }
+
       if (handleEjectionError(errorMessage)) {
         console.log('Caught ejection error in unhandledrejection');
         event.preventDefault();
@@ -187,6 +261,25 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
           event.message.includes('Check the render method')
       )) {
         return; // Let React handle its own errors
+      }
+
+      // Check if this is a normal end of conversation
+      if (typeof event.message === 'string' &&
+          (event.message.includes('assistant-ended-call-with-hangup-task') ||
+           event.message.includes('endedReason'))) {
+        console.log('This is a normal end of conversation, not an error');
+
+        // Show success toast
+        toast.success('Interview completed successfully!');
+
+        // Redirect to dashboard after a short delay
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 2000);
+
+        event.preventDefault();
+        event.stopPropagation();
+        return;
       }
 
       if (handleEjectionError(event.message)) {
@@ -230,11 +323,30 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
       if (message &&
           (message.toLowerCase().includes('meeting ended due to ejection') ||
            message.toLowerCase().includes('meeting has ended'))) {
-        console.log('Caught ejection error at Error creation:', message);
+        console.log('Detected call end signal at Error creation:', message);
 
-        setTimeout(() => {
-          handleEjectionError(message);
-        }, 0);
+        // Check if this is a normal end of conversation
+        if (message.includes('assistant-ended-call-with-hangup-task') ||
+            message.includes('endedReason')) {
+          console.log('This is a normal end of conversation, not an error');
+
+          setTimeout(() => {
+            // Show success toast
+            toast.success('Interview completed successfully!');
+
+            // Redirect to dashboard after a short delay
+            setTimeout(() => {
+              router.push('/dashboard');
+            }, 2000);
+          }, 0);
+        } else {
+          // Handle as an unexpected ejection
+          console.log('Caught ejection error at Error creation:', message);
+
+          setTimeout(() => {
+            handleEjectionError(message);
+          }, 0);
+        }
       } else if (!message || message === '{}' || message === 'undefined' || message === '[object Object]') {
         // Handle empty error messages which might be from Vapi
         console.log('Empty or invalid error detected, might be from Vapi:', message);
@@ -323,8 +435,8 @@ const EjectionErrorHandler: React.FC<EjectionErrorHandlerProps> = ({ children })
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg text-white">
-          <h2 className="text-xl font-bold mb-4">Interview Ended</h2>
-          <p>The interview was ended by the system.</p>
+          <h2 className="text-xl font-bold mb-4">Interview Completed</h2>
+          <p>Your interview has been successfully generated.</p>
           <p className="mt-2">Redirecting to dashboard...</p>
         </div>
       </div>

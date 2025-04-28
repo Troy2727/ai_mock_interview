@@ -38,36 +38,110 @@ const Agent = ({userName, userId, type}: AgentProps) => {
   const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // State to store the JWT token
+  const [vapiToken, setVapiToken] = useState<string | null>(null);
+
   // Use a ref to store the Vapi instance to avoid recreating it on every render
-  const vapiRef = useRef(getVapiInstance({
-    onError: (error) => {
-      console.error('Vapi error:', error);
-      setErrorMessage(`Audio error: ${error.message}`);
-      toast.error(`Audio error: ${error.message}`);
-      setShowAudioTroubleshooter(true);
-    },
-    onConnectionLost: (error) => {
-      console.warn('Connection lost:', error);
-      setErrorMessage('Connection lost. Attempting to reconnect...');
-      toast.warning('Connection lost. Attempting to reconnect...');
-    },
-    onReconnectSuccess: () => {
-      console.log('Reconnected successfully');
-      setErrorMessage(null);
-      toast.success('Reconnected successfully!');
-    },
-    onReconnectFailed: (error) => {
-      console.error('Failed to reconnect:', error);
-      setErrorMessage(`Failed to reconnect: ${error?.message || 'Unknown error'}`);
-      toast.error('Failed to reconnect. Please try again.');
-      setCallStatus(CallStatus.FINISHED);
-    },
-    onEjection: (error) => {
-      console.warn('Meeting ejection detected:', error);
-      setErrorMessage('Meeting ended unexpectedly. Attempting to reconnect...');
-      toast.warning('Meeting ended unexpectedly. Attempting to reconnect...');
+  const vapiRef = useRef<any>(null);
+
+  // Fetch the JWT token from our API endpoint
+  useEffect(() => {
+    const fetchToken = async () => {
+      try {
+        const response = await fetch('/api/vapi-token');
+        const data = await response.json();
+
+        if (data.error) {
+          console.error('Error fetching Vapi token:', data.error);
+          toast.error(`Error fetching Vapi token: ${data.message}`);
+          return;
+        }
+
+        setVapiToken(data.token);
+        console.log('Vapi token fetched successfully');
+      } catch (error) {
+        console.error('Error fetching Vapi token:', error);
+        toast.error(`Error fetching Vapi token: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    };
+
+    fetchToken();
+  }, []);
+
+  // Initialize Vapi instance when token is available
+  useEffect(() => {
+    if (!vapiToken) return;
+
+    console.log('Initializing Vapi instance with token');
+
+    try {
+      // Import the Vapi SDK directly
+      import('@vapi-ai/web').then(VapiModule => {
+        try {
+          console.log('Vapi SDK imported successfully');
+
+          // Create a new Vapi instance directly
+          const Vapi = VapiModule.default;
+          console.log('Creating Vapi instance with token');
+
+          // Create the Vapi instance
+          const vapiInstance = new Vapi(vapiToken);
+          console.log('Vapi instance created successfully');
+
+          // Set up event handlers
+          vapiInstance.on('error', (error: any) => {
+            console.error('Vapi error:', error);
+            setErrorMessage(`Audio error: ${error instanceof Error ? error.message : String(error)}`);
+            toast.error(`Audio error: ${error instanceof Error ? error.message : String(error)}`);
+            setShowAudioTroubleshooter(true);
+          });
+
+          vapiInstance.on('call-start', () => {
+            console.log('Call started');
+            setCallStatus(CallStatus.ACTIVE);
+            setErrorMessage(null);
+            toast.success('Call started successfully');
+          });
+
+          vapiInstance.on('call-end', () => {
+            console.log('Call ended');
+            setCallStatus(CallStatus.INACTIVE);
+          });
+
+          vapiInstance.on('speech-start', () => {
+            console.log('Speech started');
+            setIsSpeaking(true);
+          });
+
+          vapiInstance.on('speech-end', () => {
+            console.log('Speech ended');
+            setIsSpeaking(false);
+          });
+
+          vapiInstance.on('message', (message: any) => {
+            console.log('Message received:', message);
+            if(message.type === 'transcript' && message.transcriptType === 'final'){
+              const newMessage = { role: message.role, content: message.transcript}
+              setMessages((prev) => [...prev, newMessage]);
+            }
+          });
+
+          // Store the Vapi instance in the ref
+          vapiRef.current = vapiInstance;
+          console.log('Vapi instance stored in ref');
+        } catch (error) {
+          console.error('Error creating Vapi instance:', error);
+          toast.error(`Error creating Vapi instance: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }).catch(error => {
+        console.error('Error importing Vapi SDK:', error);
+        toast.error(`Error importing Vapi SDK: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    } catch (error) {
+      console.error('Error in Vapi initialization:', error);
+      toast.error(`Error in Vapi initialization: ${error instanceof Error ? error.message : String(error)}`);
     }
-  }));
+  }, [vapiToken]);
 
     // Check microphone permission on component mount
     useEffect(() => {
@@ -95,43 +169,9 @@ const Agent = ({userName, userId, type}: AgentProps) => {
       };
     }, []);
 
-    // Set up Vapi event listeners
-    useEffect(() => {
-      const vapi = vapiRef.current;
-
-      const onCallStart = () => {
-        setCallStatus(CallStatus.ACTIVE);
-        setErrorMessage(null);
-      };
-
-      const onCallEnd = () => setCallStatus(CallStatus.FINISHED);
-
-      const onMessage = (message: Message) => {
-        if(message.type === 'transcript' && message.transcriptType === 'final'){
-          const newMessage = { role: message.role, content: message.transcript}
-          setMessages((prev) => [...prev, newMessage]);
-        }
-      };
-
-      const onSpeechStart = () => setIsSpeaking(true);
-      const onSpeechEnd = () => setIsSpeaking(false);
-
-      // Register event listeners
-      vapi.on('call-start', onCallStart);
-      vapi.on('call-end', onCallEnd);
-      vapi.on('message', onMessage);
-      vapi.on('speech-start', onSpeechStart);
-      vapi.on('speech-end', onSpeechEnd);
-
-      // Clean up event listeners when component unmounts
-      return () => {
-        vapi.off('call-start', onCallStart);
-        vapi.off('call-end', onCallEnd);
-        vapi.off('message', onMessage);
-        vapi.off('speech-start', onSpeechStart);
-        vapi.off('speech-end', onSpeechEnd);
-      };
-    }, []);
+    // We don't need this effect anymore since we're setting up event listeners
+    // when we create the Vapi instance in the previous useEffect
+    // This avoids duplicate event listeners
 
     // Handle call status changes
     useEffect(() => {
@@ -148,6 +188,14 @@ const Agent = ({userName, userId, type}: AgentProps) => {
         console.log('Starting interview generation...');
         toast.info('Starting interview generation...');
 
+        // Check if we have a Vapi instance
+        if (!vapiRef.current) {
+          const errorMsg = 'Vapi is not initialized yet. Please wait a moment and try again.';
+          console.error(errorMsg);
+          toast.error(errorMsg);
+          return;
+        }
+
         // Check microphone permission before starting the call
         const hasPermission = await checkMicrophonePermission();
         console.log('Microphone permission:', hasPermission);
@@ -162,225 +210,87 @@ const Agent = ({userName, userId, type}: AgentProps) => {
         setCallStatus(CallStatus.CONNECTING);
 
         // Log Vapi configuration
-        console.log('Vapi token available:', !!process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
+        console.log('Vapi token available:', !!vapiToken);
         console.log('Vapi workflow ID:', process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID);
 
         // Validate Vapi configuration
-        if (!process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN) {
-          toast.error('Vapi Web Token is missing. Please check your environment variables.');
-          throw new Error('Vapi Web Token is missing. Please check your environment variables.');
+        if (!vapiToken) {
+          const errorMsg = 'Vapi token is not available. Please wait a moment and try again.';
+          console.error(errorMsg);
+          toast.error(errorMsg);
+          throw new Error(errorMsg);
         }
 
         if (!process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID) {
-          toast.error('Vapi Workflow ID is missing. Please check your environment variables.');
-          throw new Error('Vapi Workflow ID is missing. Please check your environment variables.');
+          const errorMsg = 'Vapi Workflow ID is missing. Please check your environment variables.';
+          console.error(errorMsg);
+          toast.error(errorMsg);
+          throw new Error(errorMsg);
         }
 
-        // Clean up any existing Vapi instance
-        resetVapiInstance();
+        // Make sure we have a valid workflow ID
+        const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
+        if (!workflowId) {
+          const errorMsg = 'Missing workflow ID';
+          console.error(errorMsg);
+          toast.error(errorMsg);
+          throw new Error(errorMsg);
+        }
 
-        // Save call configuration for potential reconnection
-        const callConfig = {
-          workflowId: process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID,
-          variableValues: {
-            username: userName || 'User',
-            userid: userId || 'anonymous',
-          }
+        console.log('Using workflow ID:', workflowId);
+
+        // Use the workflow ID directly as a string
+        const workflowIdStr = String(workflowId);
+        console.log('Using workflow ID as string:', workflowIdStr);
+
+        // Create variable values object
+        const variableValues = {
+          username: userName || 'User',
+          userid: userId || 'anonymous',
         };
-        console.log('Call config:', callConfig);
-        saveCallConfig(callConfig);
 
-        // Start the call with enhanced connection handling
-        console.log('Starting enhanced call...');
+        console.log('Using variable values:', JSON.stringify(variableValues));
 
-        // Based on Vapi documentation, we need to:
-        // 1. Create a new Vapi instance
-        // 2. Set up event handlers
-        // 3. Start the call
+        // Create call options
+        const callOptions = {
+          variableValues: variableValues
+        };
 
-        // Use our wrapper to get a Vapi instance (which will use the mock in development)
+        console.log('Call options:', JSON.stringify(callOptions));
+
+        // Start the call with the workflow ID as a string and the variable values
+        console.log('Starting Vapi call with vapiRef.current.start...');
+
         try {
-          // Log the current domain for debugging
-          console.log('Current domain:', window.location.hostname);
+          // Log the Vapi instance type
+          console.log('Vapi instance type:', vapiRef.current ? typeof vapiRef.current : 'undefined');
+          console.log('Vapi instance methods:', vapiRef.current ? Object.keys(vapiRef.current) : 'undefined');
 
-          // Get a Vapi instance from our wrapper
-          console.log('Getting Vapi instance from wrapper...');
-          const vapiInstance = getVapiInstance({
-            onError: (error) => {
-              console.error('Vapi error:', error);
-              setErrorMessage(`Audio error: ${error.message}`);
-            },
-            onConnectionLost: () => {
-              console.warn('Connection lost');
-              setErrorMessage('Connection lost. Attempting to reconnect...');
-            },
-            onReconnectSuccess: () => {
-              console.log('Reconnected successfully');
-              setErrorMessage(null);
-            },
-            onEjection: () => {
-              console.warn('Meeting ejection detected');
-              setErrorMessage('Meeting ended unexpectedly.');
-            }
-          });
-          console.log('Vapi instance obtained successfully');
+          // Start the call
+          const result = await vapiRef.current.start(workflowIdStr, callOptions);
+          console.log('Call started with result:', result);
+          console.log('Call initialization completed');
 
-          // Set up event handlers with improved error handling
-          vapiInstance.on('error', (error: any) => {
-            console.error('Vapi error:', error);
+          // Show success message
+          toast.success('Call started successfully!');
+        } catch (startError) {
+          console.error('Error starting Vapi call:', startError);
 
-            // Log detailed error information
-            console.log('Error details:', {
-              message: error?.message || 'Unknown error',
-              name: error?.name,
-              code: error?.code,
-              stack: error?.stack,
-              toString: String(error)
-            });
+          // Create a more detailed error message
+          const errorMessage = startError instanceof Error
+            ? startError.message
+            : (typeof startError === 'string' ? startError : 'Unknown error');
 
-            // Check for specific error types
-            const errorStr = String(error);
-
-            if (errorStr.includes('unauthorized') || errorStr.includes('domain')) {
-              const domainError = `Domain authorization error: Please add ${window.location.hostname} to your Vapi authorized domains`;
-              console.error(domainError);
-              setErrorMessage(domainError);
-              toast.error(domainError);
-              return;
-            }
-
-            if (errorStr.includes('microphone') || errorStr.includes('audio') || errorStr.includes('permission')) {
-              const micError = 'Microphone access is required. Please grant microphone permissions.';
-              console.error(micError);
-              setErrorMessage(micError);
-              setShowAudioTroubleshooter(true);
-              toast.error(micError);
-              return;
-            }
-
-            // Default error message
-            setErrorMessage(`Audio error: ${error instanceof Error ? error.message : String(error)}`);
+          console.error('Error details:', {
+            message: errorMessage,
+            workflowId: workflowIdStr,
+            options: JSON.stringify(callOptions)
           });
 
-          vapiInstance.on('call-start', () => {
-            console.log('Call started');
-            setCallStatus(CallStatus.ACTIVE);
-            toast.success('Interview started successfully');
-          });
-
-          vapiInstance.on('call-end', () => {
-            console.log('Call ended');
-            setCallStatus(CallStatus.INACTIVE);
-          });
-
-          // Store the instance globally before starting the call
-          console.log('Storing Vapi instance globally');
-          (window as any).__VAPI_INSTANCE__ = vapiInstance;
-
-          // Add a marker to the DOM to indicate Vapi is initialized
-          // This helps the EjectionErrorHandler distinguish between initialization errors and real errors
-          const marker = document.createElement('div');
-          marker.style.display = 'none';
-          marker.setAttribute('data-vapi-initialized', 'true');
-          document.body.appendChild(marker);
-
-          // Start the call with better error handling
-          console.log('Starting Vapi call...');
-          try {
-            // Make sure we have a valid workflow ID
-            const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
-            if (!workflowId) {
-              throw new Error('Missing workflow ID');
-            }
-
-            console.log('Using workflow ID:', workflowId);
-
-            // Use the workflow ID directly as a string
-            const workflowIdStr = String(workflowId);
-            console.log('Using workflow ID as string:', workflowIdStr);
-
-            // Create variable values object
-            const variableValues = {
-              username: userName || 'User',
-              userid: userId || 'anonymous',
-            };
-
-            console.log('Using variable values:', variableValues);
-
-            // Start the call with the workflow ID as a string and the variable values
-            const result = await vapiInstance.start(workflowIdStr, {
-              variableValues: variableValues
-            });
-
-            console.log('Call started with result:', result);
-          } catch (startError) {
-            console.error('Error starting Vapi call:', startError);
-
-            // Check for specific error types
-            const errorStr = String(startError);
-
-            if (errorStr.includes('unauthorized') || errorStr.includes('domain')) {
-              throw new Error(`Domain authorization error: Please add ${window.location.hostname} to your Vapi authorized domains`);
-            }
-
-            if (errorStr.includes('microphone') || errorStr.includes('audio') || errorStr.includes('permission')) {
-              setShowAudioTroubleshooter(true);
-              throw new Error('Microphone access is required. Please grant microphone permissions and try again.');
-            }
-
-            // Check for 404 errors which might indicate URL construction issues
-            if (errorStr.includes('404') || errorStr.includes('Not Found')) {
-              throw new Error('API endpoint not found. This might be due to an incorrect workflow ID or API configuration.');
-            }
-
-            // Re-throw with more context
-            throw new Error(`Failed to start Vapi call: ${startError instanceof Error ? startError.message : String(startError)}`);
-          }
-        } catch (error) {
-          console.error('Error with direct Vapi integration:', error);
-
-          // Fall back to our wrapper
-          console.log('Falling back to enhanced call wrapper...');
-
-          // Make sure we have a valid workflow ID
-          const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
-          if (!workflowId) {
-            throw new Error('Missing workflow ID in fallback method');
-          }
-
-          console.log('Using workflow ID in fallback:', workflowId);
-
-          // Make sure to use the workflow ID as a string
-          const workflowIdStr = String(workflowId);
-          console.log('Using workflow ID as string in fallback:', workflowIdStr);
-
-          // Create variable values object
-          const variableValues = {
-            username: userName || 'User',
-            userid: userId || 'anonymous',
-          };
-
-          console.log('Using variable values in fallback:', variableValues);
-
-          // Use the string workflow ID directly
-          await startEnhancedCall(
-            workflowIdStr,
-            {
-              variableValues: variableValues
-            }
-          );
+          throw new Error(`Failed to start Vapi call: ${errorMessage}`);
         }
-
-        console.log('Call initialization completed');
       } catch (error) {
         console.error('Failed to start call:', error);
-
-        // Reset the Vapi instance to clean up
-        try {
-          resetVapiInstance();
-        } catch (resetError) {
-          console.warn('Error resetting Vapi instance:', resetError);
-        }
 
         // Check for specific error types
         const errorStr = String(error);
@@ -388,12 +298,15 @@ const Agent = ({userName, userId, type}: AgentProps) => {
         let shouldRedirect = true;
 
         if (errorStr.includes('unauthorized') || errorStr.includes('domain')) {
-          errorMessage = `Domain authorization error: Please add ${window.location.hostname} to your Vapi authorized domains list in the Vapi dashboard.`;
+          errorMessage = `Domain authorization error: Please check your Vapi token configuration.`;
           // Don't redirect for domain errors - let the user see the message
           shouldRedirect = false;
         } else if (errorStr.includes('microphone') || errorStr.includes('audio') || errorStr.includes('permission')) {
           errorMessage = 'Microphone access is required for the interview. Please grant microphone permissions and try again.';
           // Don't redirect for permission errors - let the user fix it
+          shouldRedirect = false;
+        } else if (errorStr.includes('{}') || errorStr === '{}') {
+          errorMessage = 'An empty error occurred. This might be due to a domain authorization issue or an invalid workflow ID.';
           shouldRedirect = false;
         }
 
@@ -430,16 +343,12 @@ const Agent = ({userName, userId, type}: AgentProps) => {
 
         // Stop the call
         console.log('Stopping Vapi instance...');
-        await vapiRef.current.stop();
-        console.log('Vapi instance stopped successfully');
-
-        // Also reset the Vapi instance to ensure complete cleanup
         try {
-          console.log('Resetting Vapi instance...');
-          resetVapiInstance();
-          console.log('Vapi instance reset successfully');
-        } catch (resetError) {
-          console.warn('Error resetting Vapi instance:', resetError);
+          await vapiRef.current.stop();
+          console.log('Vapi instance stopped successfully');
+        } catch (stopError) {
+          console.error('Error stopping Vapi instance:', stopError);
+          toast.error(`Error stopping call: ${stopError instanceof Error ? stopError.message : String(stopError)}`);
         }
 
         // Clear any messages that might be in progress
@@ -449,13 +358,7 @@ const Agent = ({userName, userId, type}: AgentProps) => {
         // Force the call to be considered finished even if there was an error
         setCallStatus(CallStatus.FINISHED);
         setIsSpeaking(false);
-
-        // Try to reset the Vapi instance as a last resort
-        try {
-          resetVapiInstance();
-        } catch (resetError) {
-          console.warn('Error resetting Vapi instance during error recovery:', resetError);
-        }
+        toast.error(`Error stopping call: ${error instanceof Error ? error.message : String(error)}`);
       }
     };
 

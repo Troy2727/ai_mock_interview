@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import {getCurrentUser} from "@/lib/actions/auth.action"
 import {  getInterviewByUserId, getLatestInterviews } from "@/lib/actions/generate.action"
 import Image from "next/image"
+import Link from "next/link"
 
 
 const page = async () => {
@@ -28,7 +29,8 @@ const page = async () => {
 
          <p className="text-[110%] max-sm:hidden  max-md:hidden sm:text-lg">Because every word counts when the job’s on the line</p>
          <Image src="/kara.webp" alt='Kara' width={210} height={200} className="block md:hidden "/>
-         <Button asChild className="btn-primary  w-full sm:w-[30%]"><StartInterviewButton />
+         <Button asChild className="btn-primary w-full sm:w-[30%]">
+           <StartInterviewButton />
          </Button>
 
      </div>

@@ -12,11 +12,11 @@ import { MockVapi } from './mock';
 
 // Configuration flag to force using the mock implementation
 // Set this to true to always use the mock implementation, even in production
-const FORCE_MOCK_VAPI = true; // Set to true to use the mock implementation
+const FORCE_MOCK_VAPI = false; // Set to false to use the real implementation
 
 // Configuration flag to force using the real implementation
 // Set this to true to always use the real implementation, even in development
-const FORCE_REAL_VAPI = false; // Set to false to avoid using the real Vapi implementation
+const FORCE_REAL_VAPI = true; // Set to true to use the real Vapi implementation
 
 import { connectionState, setupConnectionMonitoring, startKeepAlive, stopKeepAlive } from './connection';
 import { handleConnectionLost, handleEjectionError } from './error-handling';
@@ -53,6 +53,7 @@ export function resetInstance(): void {
  * @returns Vapi instance
  */
 export function getVapiInstance(options?: {
+  token?: string; // JWT token for authentication
   audioDeviceId?: string;
   onError?: (error: Error) => void;
   onConnectionLost?: (error?: Error) => void;
@@ -77,6 +78,28 @@ export function getVapiInstance(options?: {
     else if (FORCE_MOCK_VAPI) {
       console.log('FORCE_MOCK_VAPI is enabled, using mock implementation');
       vapiInstance = new MockVapi(process.env.NEXT_PUBLIC_VAPI_WEB_TOKEN);
+    }
+    // Check if a JWT token is provided in the options
+    else if (options?.token) {
+      console.log('Using provided JWT token for Vapi instance');
+
+      try {
+        console.log('Creating real Vapi instance with provided JWT token');
+
+        // Log the current domain for debugging
+        console.log('Current domain:', window.location.hostname);
+
+        // Create options for Vapi initialization
+        const vapiOptions = {
+          debug: true // Enable debug mode for better logging
+        };
+
+        // Create our custom Vapi instance with the provided JWT token
+        vapiInstance = new CustomVapi(options.token, vapiOptions);
+      } catch (error) {
+        console.error('Error creating real Vapi instance with JWT token, falling back to mock:', error);
+        vapiInstance = new MockVapi(options.token);
+      }
     }
     // Check if we should force using the real implementation
     else if (FORCE_REAL_VAPI) {

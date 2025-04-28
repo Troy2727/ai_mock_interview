@@ -15,17 +15,39 @@ export class CustomVapi {
   private eventHandlers: Record<string, ((...args: unknown[]) => void)[]> = {};
 
   constructor(token: string, options?: any) {
-    console.log('CustomVapi: Initializing with token', token);
+    console.log('CustomVapi: Initializing with token', token ? token.substring(0, 5) + '...' : 'undefined');
+
+    if (!token) {
+      console.error('CustomVapi: Token is required');
+      throw new Error('Token is required for Vapi initialization');
+    }
+
     this.token = token;
     this.options = options || {};
 
     // Create the original Vapi instance
     try {
+      // Log more details for debugging
+      console.log('CustomVapi: Creating original Vapi instance with options:', JSON.stringify(options || {}));
+
+      // Create the original Vapi instance
       this.originalVapi = new OriginalVapi(token, options);
       console.log('CustomVapi: Original Vapi instance created successfully');
     } catch (error) {
       console.error('CustomVapi: Error creating original Vapi instance', error);
-      throw error;
+
+      // Create a more detailed error
+      const errorMessage = error instanceof Error
+        ? error.message
+        : (typeof error === 'string' ? error : 'Unknown error');
+
+      console.error('CustomVapi: Error details:', {
+        message: errorMessage,
+        token: token ? 'provided' : 'missing',
+        options: options ? 'provided' : 'missing'
+      });
+
+      throw new Error(`Failed to initialize Vapi: ${errorMessage}`);
     }
   }
 
@@ -36,17 +58,52 @@ export class CustomVapi {
    * @returns Promise that resolves to a call object
    */
   async start(workflowIdOrAssistant: string | Record<string, unknown>, options?: any): Promise<any> {
-    console.log('CustomVapi: Starting call with', { workflowIdOrAssistant, options });
+    console.log('CustomVapi: Starting call with', {
+      workflowIdOrAssistant: typeof workflowIdOrAssistant === 'string'
+        ? workflowIdOrAssistant
+        : JSON.stringify(workflowIdOrAssistant),
+      options: options ? JSON.stringify(options) : 'undefined'
+    });
+
+    // Validate that originalVapi exists
+    if (!this.originalVapi) {
+      const error = new Error('Vapi instance not initialized properly');
+      console.error('CustomVapi: Error starting call - Vapi instance not initialized');
+      this.emit('error', error);
+      throw error;
+    }
 
     try {
       // If workflowIdOrAssistant is a string, use it directly
       if (typeof workflowIdOrAssistant === 'string') {
         console.log('CustomVapi: Using workflow ID directly:', workflowIdOrAssistant);
 
+        // Validate the workflow ID
+        if (!workflowIdOrAssistant || workflowIdOrAssistant.trim() === '') {
+          const error = new Error('Workflow ID cannot be empty');
+          console.error('CustomVapi: Error starting call - Empty workflow ID');
+          this.emit('error', error);
+          throw error;
+        }
+
         // Call the original Vapi start method with the string workflow ID
-        const result = await this.originalVapi.start(workflowIdOrAssistant, options);
-        console.log('CustomVapi: Call started successfully with result', result);
-        return result;
+        try {
+          console.log('CustomVapi: Calling original Vapi start with workflow ID:', workflowIdOrAssistant);
+          const result = await this.originalVapi.start(workflowIdOrAssistant, options);
+          console.log('CustomVapi: Call started successfully with result', result);
+          return result;
+        } catch (startError) {
+          console.error('CustomVapi: Error in original Vapi start call:', startError);
+
+          // Create a more detailed error
+          const errorMessage = startError instanceof Error
+            ? startError.message
+            : (typeof startError === 'string' ? startError : 'Unknown error');
+
+          const error = new Error(`Failed to start Vapi call: ${errorMessage}`);
+          this.emit('error', error);
+          throw error;
+        }
       }
 
       // If workflowIdOrAssistant is an object, extract the workflowId
@@ -56,9 +113,11 @@ export class CustomVapi {
         // Extract the workflowId from the object
         const workflowId = (workflowIdOrAssistant as any).workflowId;
 
-        if (!workflowId || typeof workflowId !== 'string') {
+        if (!workflowId || typeof workflowId !== 'string' || workflowId.trim() === '') {
           console.error('CustomVapi: Invalid workflow ID in object', workflowIdOrAssistant);
-          throw new Error('Invalid workflow ID in object');
+          const error = new Error('Invalid or empty workflow ID in object');
+          this.emit('error', error);
+          throw error;
         }
 
         console.log('CustomVapi: Extracted workflow ID:', workflowId);
@@ -68,21 +127,37 @@ export class CustomVapi {
           ...options,
           variableValues: {
             ...(options?.variableValues || {}),
-            ...(workflowIdOrAssistant as any).variableValues || {},
+            ...((workflowIdOrAssistant as any).variableValues || {}),
           }
         };
 
-        console.log('CustomVapi: Using merged options', mergedOptions);
+        console.log('CustomVapi: Using merged options', JSON.stringify(mergedOptions));
 
         // Call the original Vapi start method with the extracted workflow ID
-        const result = await this.originalVapi.start(workflowId, mergedOptions);
-        console.log('CustomVapi: Call started successfully with result', result);
-        return result;
+        try {
+          console.log('CustomVapi: Calling original Vapi start with extracted workflow ID:', workflowId);
+          const result = await this.originalVapi.start(workflowId, mergedOptions);
+          console.log('CustomVapi: Call started successfully with result', result);
+          return result;
+        } catch (startError) {
+          console.error('CustomVapi: Error in original Vapi start call with extracted workflow ID:', startError);
+
+          // Create a more detailed error
+          const errorMessage = startError instanceof Error
+            ? startError.message
+            : (typeof startError === 'string' ? startError : 'Unknown error');
+
+          const error = new Error(`Failed to start Vapi call with extracted workflow ID: ${errorMessage}`);
+          this.emit('error', error);
+          throw error;
+        }
       }
 
       // If workflowIdOrAssistant is neither a string nor an object, throw an error
       console.error('CustomVapi: Invalid workflow ID or assistant config', workflowIdOrAssistant);
-      throw new Error('Invalid workflow ID or assistant config');
+      const error = new Error('Invalid workflow ID or assistant config - must be a string or an object with a workflowId property');
+      this.emit('error', error);
+      throw error;
     } catch (error) {
       console.error('CustomVapi: Error starting call', error);
 

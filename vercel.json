@@ -33,5 +33,16 @@
       "source": "/api/google-auth/vapi/generate",
       "destination": "/api/google-auth/vapi/generate"
     }
+  ],
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next",
+      "config": {
+        "maxLambdaSize": "15mb",
+        "memory": 3008,
+        "maxDuration": 60
+      }
+    }
   ]
 }

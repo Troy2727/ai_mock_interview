@@ -2,8 +2,10 @@ import { initializeApp, getApps, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 
-// Check if we're running in a CI environment
+// Check if we're running in a CI environment or Vercel build environment
 const isCI = process.env.CI === 'true';
+const isVercelBuild = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+const shouldUseMocks = isCI || isVercelBuild;
 
 // Mock implementations for CI environment
 class MockFirestore {
@@ -53,9 +55,9 @@ class MockAuth {
 
 // Initialize Firebase Admin SDK
 function initFirebaseAdmin() {
-  // If we're in a CI environment, return mock implementations
-  if (isCI) {
-    console.log('CI environment detected, using mock Firebase implementations');
+  // If we're in a CI environment or Vercel build, return mock implementations
+  if (shouldUseMocks) {
+    console.log('CI or Vercel build environment detected, using mock Firebase implementations');
     return {
       auth: new MockAuth(),
       db: new MockFirestore(),

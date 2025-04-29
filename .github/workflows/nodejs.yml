@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CI: true
 
     steps:
     - uses: actions/checkout@v4
@@ -28,3 +30,8 @@ jobs:
 
     - name: Build
       run: npm run build
+      env:
+        # Set dummy Firebase values for CI build
+        FIREBASE_PROJECT_ID: ci-dummy-project
+        FIREBASE_CLIENT_EMAIL: ci-dummy@example.com
+        FIREBASE_PRIVATE_KEY: '{"type":"service_account"}'

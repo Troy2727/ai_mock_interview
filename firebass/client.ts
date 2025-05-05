@@ -1,7 +1,10 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApp, getApps } from "firebase/app";
-import { getAuth,GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+// Import our custom error handler and popup handler
+import { isPopupClosedError, handleFirebaseAuthError } from "./errorHandler";
+import { customSignInWithPopup } from "./customPopup";
 
 
 
@@ -62,7 +65,15 @@ export const signInWithGoogle = async () => {
       throw new Error("Authentication service is not available");
     }
 
-    const result = await signInWithPopup(auth, provider);
+    // Use our custom popup handler
+    const result = await customSignInWithPopup(auth, provider);
+
+    // If the result is null, the user closed the popup
+    if (!result) {
+      console.log("User closed the sign-in popup window");
+      return null;
+    }
+
     const credential = GoogleAuthProvider.credentialFromResult(result);
     const token = credential?.accessToken;
     const user = result.user;
@@ -99,17 +110,15 @@ export const signInWithGoogle = async () => {
 
     return { user, token, idToken }; // ✅ returning all
   } catch (error) {
-    console.error("Error signing in with Google: ", error);
+    // Use our custom error handler to get a user-friendly message
+    const errorMessage = handleFirebaseAuthError(error);
 
-    // Provide more user-friendly error messages
-    if (error.code === 'auth/invalid-api-key') {
-      throw new Error("Authentication configuration error. Please contact support.");
-    } else if (error.code === 'auth/network-request-failed') {
-      throw new Error("Network error. Please check your internet connection.");
-    } else if (error.code === 'auth/popup-closed-by-user') {
-      throw new Error("Sign-in cancelled. Please try again.");
-    } else {
-      throw error;
+    // If it's a popup closed error, our handler returns an empty string
+    if (!errorMessage) {
+      return null;
     }
+
+    // For all other errors, throw with the friendly message
+    throw new Error(errorMessage);
   }
 };

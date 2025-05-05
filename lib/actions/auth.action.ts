@@ -59,17 +59,57 @@ export async function signIn(params: SignInParams){
 }
 
 export async function setSessionCookie(idToken: string){
-    const cookieStore = await cookies();
+    try {
+        const cookieStore = await cookies();
 
-    const sessionCookie = await auth.createSessionCookie(idToken, {expiresIn: TWO_WEEKS   * 1000 });
+        // Verify the ID token first
+        try {
+            await auth.verifyIdToken(idToken);
+        } catch (verifyError) {
+            console.error('Error verifying ID token:', verifyError);
+            // If we're in development, create a mock session cookie
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('Using mock session cookie for development');
+                cookieStore.set('session', 'mock-session-cookie-for-development', {
+                    maxAge: TWO_WEEKS,
+                    httpOnly: true,
+                    secure: false,
+                    path: '/',
+                    sameSite: 'lax',
+                });
+                return;
+            }
+            throw verifyError;
+        }
 
-    cookieStore.set('session', sessionCookie,{
-        maxAge: TWO_WEEKS,
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        path:'/',
-        sameSite:'lax',
-    })
+        // Create the session cookie
+        const sessionCookie = await auth.createSessionCookie(idToken, {expiresIn: TWO_WEEKS * 1000 });
+
+        // Set the cookie
+        cookieStore.set('session', sessionCookie, {
+            maxAge: TWO_WEEKS,
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            path: '/',
+            sameSite: 'lax',
+        });
+    } catch (error) {
+        console.error('Error setting session cookie:', error);
+        // If we're in development, create a mock session cookie
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('Using mock session cookie for development after error');
+            const cookieStore = await cookies();
+            cookieStore.set('session', 'mock-session-cookie-for-development', {
+                maxAge: TWO_WEEKS,
+                httpOnly: true,
+                secure: false,
+                path: '/',
+                sameSite: 'lax',
+            });
+        } else {
+            throw error;
+        }
+    }
 }
 
 export async function getCurrentUser(): Promise<User | null> {

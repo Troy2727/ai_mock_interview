@@ -12,11 +12,11 @@ import { MockVapi } from './mock';
 
 // Configuration flag to force using the mock implementation
 // Set this to true to always use the mock implementation, even in production
-const FORCE_MOCK_VAPI = false; // Set to false to use the real implementation
+const FORCE_MOCK_VAPI = process.env.NEXT_PUBLIC_FORCE_MOCK_VAPI === 'true' || false;
 
 // Configuration flag to force using the real implementation
 // Set this to true to always use the real implementation, even in development
-const FORCE_REAL_VAPI = true; // Set to true to use the real Vapi implementation
+const FORCE_REAL_VAPI = !FORCE_MOCK_VAPI && (process.env.NEXT_PUBLIC_FORCE_REAL_VAPI === 'true' || false);
 
 import { connectionState, setupConnectionMonitoring, startKeepAlive, stopKeepAlive } from './connection';
 import { handleConnectionLost, handleEjectionError } from './error-handling';

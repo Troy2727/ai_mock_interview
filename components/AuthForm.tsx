@@ -13,7 +13,7 @@ import { toast } from "sonner"
 import FormField from "./FormField"
 import { useRouter } from "next/navigation"
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/firebass/client";
+import { auth } from "@/firebass";
 import { signIn, signUp } from "@/lib/actions/auth.action";
 import Loading from "./Loading"
 
@@ -147,20 +147,33 @@ const AuthForm = ({type}: {type: FormType}) => {
           onClick={async () => {
             try {
               setIsLoading(true);
-              const { signInWithGoogle } = await import("@/firebass/client");
+              const { signInWithGoogle } = await import("@/firebass");
+
+              // Call signInWithGoogle and handle the result
               const result = await signInWithGoogle();
+
+              // If result is null, the user likely closed the popup
               if (!result) {
-                toast.error("Google sign-in failed.");
+                // Just silently end the loading state without showing any error
                 setIsLoading(false);
                 return;
               }
+
+              // Continue with the sign-in process
               const idToken = await result.user.getIdToken();
               await signIn({ email: result.user.email!, idToken });
               toast.success("Signed in with Google successfully!");
               router.push("/dashboard");
-            } catch (err) {
-              console.error(err);
-              toast.error("Google sign-in error.");
+            } catch (err: any) {
+              console.error("Google sign-in error:", err);
+
+              // Show the error message to the user
+              if (err.message) {
+                toast.error(err.message);
+              } else {
+                toast.error("An error occurred during sign-in. Please try again.");
+              }
+
               setIsLoading(false);
             }
           }}

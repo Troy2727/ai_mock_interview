@@ -1,22 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getBaseUrl } from '@/lib/vapi/config';
 
-/**
- * VapiRedirectHandler component
- * 
- * This component handles redirects from Vapi workflows.
- * It should be included in your layout or on pages that need to handle Vapi redirects.
- * 
- * It looks for specific URL parameters that Vapi might include in redirects:
- * - vapi_session_id: The ID of the Vapi session
- * - vapi_status: The status of the Vapi call (completed, cancelled, etc.)
- * - redirect_to: Where to redirect after processing the Vapi parameters
- */
-export default function VapiRedirectHandler() {
+// Create a separate component that uses useSearchParams
+function VapiRedirectHandlerInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -41,7 +31,7 @@ export default function VapiRedirectHandler() {
           // Handle different Vapi statuses
           if (vapiStatus === 'completed') {
             toast.success('Your Vapi session was completed successfully!');
-            
+
             // You could save session data to your backend here if needed
             // For example:
             // await fetch('/api/vapi/save-session', {
@@ -49,7 +39,7 @@ export default function VapiRedirectHandler() {
             //   headers: { 'Content-Type': 'application/json' },
             //   body: JSON.stringify({ sessionId: vapiSessionId, status: vapiStatus })
             // });
-          } 
+          }
           else if (vapiStatus === 'cancelled') {
             toast.info('Your Vapi session was cancelled.');
           }
@@ -66,20 +56,40 @@ export default function VapiRedirectHandler() {
 
           console.log('Redirecting to:', cleanRedirectUrl);
           router.push(redirectTo);
-        } 
+        }
         catch (error) {
           console.error('Error handling Vapi redirect:', error);
           toast.error('Error processing your session. Please try again.');
-        } 
+        }
         finally {
           setIsProcessing(false);
         }
       }
     };
-    
+
     handleVapiRedirect();
   }, [router, searchParams]);
-  
+
   // This component doesn't render anything visible
   return null;
+}
+
+/**
+ * VapiRedirectHandler component
+ *
+ * This component handles redirects from Vapi workflows.
+ * It should be included in your layout or on pages that need to handle Vapi redirects.
+ *
+ * It looks for specific URL parameters that Vapi might include in redirects:
+ * - vapi_session_id: The ID of the Vapi session
+ * - vapi_status: The status of the Vapi call (completed, cancelled, etc.)
+ * - redirect_to: Where to redirect after processing the Vapi parameters
+ */
+export default function VapiRedirectHandler() {
+  // Wrap the component that uses useSearchParams in a Suspense boundary
+  return (
+    <Suspense fallback={null}>
+      <VapiRedirectHandlerInner />
+    </Suspense>
+  );
 }

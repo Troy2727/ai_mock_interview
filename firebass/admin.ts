@@ -73,6 +73,9 @@ function initFirebaseAdmin() {
     // Check if required environment variables are present
     if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !privateKey) {
       console.warn('Missing Firebase Admin SDK credentials. Using mock implementations.');
+      console.warn('Project ID:', process.env.FIREBASE_PROJECT_ID ? 'present' : 'missing');
+      console.warn('Client Email:', process.env.FIREBASE_CLIENT_EMAIL ? 'present' : 'missing');
+      console.warn('Private Key:', privateKey ? 'present' : 'missing');
       return {
         auth: new MockAuth(),
         db: new MockFirestore(),
@@ -81,16 +84,29 @@ function initFirebaseAdmin() {
 
     // Handle different formats of the private key
     if (privateKey) {
+      console.log('Processing private key...');
+
       // If the key is JSON-stringified, parse it
       if (privateKey.startsWith('"') && privateKey.endsWith('"')) {
+        console.log('Private key is JSON-stringified, parsing...');
         privateKey = JSON.parse(privateKey);
       }
 
       // Replace literal \n with newlines if they exist
-      privateKey = privateKey.replace(/\\n/g, "\n");
+      if (privateKey.includes('\\n')) {
+        console.log('Replacing \\n with newlines in private key...');
+        privateKey = privateKey.replace(/\\n/g, "\n");
+      }
+
+      // Log the first and last few characters of the private key for debugging
+      if (privateKey.length > 20) {
+        console.log(`Private key starts with: ${privateKey.substring(0, 10)}...`);
+        console.log(`Private key ends with: ...${privateKey.substring(privateKey.length - 10)}`);
+      }
     }
 
     try {
+      console.log('Initializing Firebase Admin SDK...');
       initializeApp({
         credential: cert({
           projectId: process.env.FIREBASE_PROJECT_ID,
@@ -98,8 +114,16 @@ function initFirebaseAdmin() {
           privateKey,
         }),
       });
+      console.log('Firebase Admin SDK initialized successfully');
     } catch (error) {
       console.error("Error initializing Firebase Admin:", error);
+
+      // Log more details about the error
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      }
+
       console.warn('Using mock implementations due to initialization error');
       return {
         auth: new MockAuth(),

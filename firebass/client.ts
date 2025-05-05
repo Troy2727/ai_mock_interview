@@ -86,7 +86,14 @@ export const signInWithGoogle = async () => {
 
     // Send to server to store in DB and set session
     try {
-      const response = await fetch("/api/google-auth", {
+      // Import the getApiUrl function dynamically to avoid circular dependencies
+      const { getApiUrl } = await import('@/lib/utils/apiUrl');
+
+      // Use the getApiUrl function to get the correct URL for the current environment
+      const apiUrl = getApiUrl('/api/google-auth');
+      console.log(`Making request to: ${apiUrl}`);
+
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -101,7 +108,29 @@ export const signInWithGoogle = async () => {
       });
 
       if (!response.ok) {
-        console.warn("Server session creation failed:", await response.text());
+        const errorText = await response.text();
+        console.warn("Server session creation failed:", errorText);
+
+        // If we're in production and the server returns a 500 error,
+        // we'll create a local session instead
+        if (response.status === 500) {
+          console.log("Creating local session as fallback for server error");
+
+          // Store the user info in localStorage as a fallback
+          try {
+            localStorage.setItem('auth_user', JSON.stringify({
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName,
+              photoURL: user.photoURL,
+              isLocalSession: true, // Flag to indicate this is a local session
+            }));
+
+            console.log("Local session created successfully");
+          } catch (localStorageError) {
+            console.error("Error creating local session:", localStorageError);
+          }
+        }
       }
     } catch (serverError) {
       console.error("Error communicating with server:", serverError);

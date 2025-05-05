@@ -113,25 +113,53 @@ export async function setSessionCookie(idToken: string){
 }
 
 export async function getCurrentUser(): Promise<User | null> {
+    // First, try to get the user from the session cookie
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get("session")?.value;
 
-    if(!sessionCookie) return null;
-    try {
-        const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
+    if (sessionCookie) {
+        try {
+            const decodedClaims = await auth.verifySessionCookie(sessionCookie, true);
 
-        const userRecord = await db. collection('users')
-        .doc(decodedClaims.uid)
-        .get();
-        if(!userRecord.exists)return null;
-        return {
-            ...userRecord.data(),
-            id: userRecord.id,
-        } as User;
-    } catch (e) {
-        console.log('Error verifying session cookie', e);
-        return null;
+            const userRecord = await db.collection('users')
+            .doc(decodedClaims.uid)
+            .get();
+
+            if (userRecord.exists) {
+                return {
+                    ...userRecord.data(),
+                    id: userRecord.id,
+                } as User;
+            }
+        } catch (e) {
+            console.log('Error verifying session cookie', e);
+            // Continue to check localStorage as fallback
+        }
     }
+
+    // If we're in a browser environment, check localStorage for a local session
+    if (typeof window !== 'undefined') {
+        try {
+            const localUser = localStorage.getItem('auth_user');
+            if (localUser) {
+                const parsedUser = JSON.parse(localUser);
+
+                // Create a User object from the localStorage data
+                return {
+                    id: parsedUser.uid,
+                    name: parsedUser.displayName || 'User',
+                    email: parsedUser.email,
+                    avatar: parsedUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(parsedUser.displayName || 'User')}&background=random&size=200&bold=true&format=svg`,
+                    isLocalSession: true,
+                } as User;
+            }
+        } catch (localStorageError) {
+            console.error('Error reading from localStorage:', localStorageError);
+        }
+    }
+
+    // If we couldn't get the user from either source, return null
+    return null;
 }
 
 export async function isAuthenticated(){
@@ -140,12 +168,20 @@ export async function isAuthenticated(){
     return !!user;
 }
 
-// Sign out user by clearing the session cookie
+// Sign out user by clearing the session cookie and local storage
 export async function signOut() {
+    // Clear the session cookie
     const cookieStore = await cookies();
-
     cookieStore.delete("session");
 
-  }
+    // Clear the local session if we're in a browser environment
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.removeItem('auth_user');
+        } catch (error) {
+            console.error('Error clearing local session:', error);
+        }
+    }
+}
 
 

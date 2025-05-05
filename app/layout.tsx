@@ -4,6 +4,8 @@ import "./globals.css";
 import { Toaster } from "sonner";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import AuthRedirectWrapper from "@/components/AuthRedirectWrapper";
+import VapiRedirectHandler from "@/components/VapiRedirectHandler";
+import MicrophonePermissionHandler from "@/components/MicrophonePermissionHandler";
 
 const monaSans = Mona_Sans({
   variable: "--font-mona-sans",
@@ -33,6 +35,10 @@ export default function RootLayout({
         </ErrorBoundary>
         {/* Add the AuthRedirectWrapper to handle redirect authentication */}
         <AuthRedirectWrapper />
+        {/* Add the VapiRedirectHandler to handle Vapi workflow redirects */}
+        <VapiRedirectHandler />
+        {/* Add the MicrophonePermissionHandler to request microphone access */}
+        <MicrophonePermissionHandler />
         <Toaster />
       </body>
     </html>

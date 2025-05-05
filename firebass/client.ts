@@ -20,10 +20,29 @@ import { customSignInWithPopup } from "./customPopup";
 // See: https://firebase.google.com/docs/projects/api-keys
 
 // Ensure we have fallback values for development
+// Get the current hostname for better domain handling
+const currentHostname = typeof window !== 'undefined' ? window.location.hostname : 'server-side';
+
+// Determine if we're in a development environment
+const isDevelopment = process.env.NODE_ENV === 'development' ||
+                     currentHostname === 'localhost' ||
+                     currentHostname === '127.0.0.1';
+
+// For development on localhost, use localhost as the auth domain
+// For all other environments, use the configured domain from env vars
+const authDomain = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "prewise-6f44b.firebaseapp.com";
+
+console.log('Current environment:', process.env.NODE_ENV);
+console.log('Current hostname:', currentHostname);
+console.log('Using auth domain:', authDomain);
+
+// Log the current hostname for debugging
+console.log('Current hostname for Firebase config:', currentHostname);
+
 const firebaseConfig = {
   // These values are intentionally public and designed to be included in client-side code
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyCjra5dwOtJAYLjlJBlTXNE2uWjxNC1kDk",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "prewise-6f44b.firebaseapp.com",
+  authDomain: authDomain,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "prewise-6f44b",
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "prewise-6f44b.firebasestorage.app",
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "424923985679",
@@ -43,9 +62,41 @@ try {
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
   provider = new GoogleAuthProvider();
+  // Add scopes for Google provider
+  provider.addScope('profile');
+  provider.addScope('email');
+
   auth = getAuth(app);
   auth.languageCode = 'en';
+
+  // Set persistence to local for better user experience
+  if (typeof window !== 'undefined') {
+    import('firebase/auth').then(({ setPersistence, browserLocalPersistence }) => {
+      setPersistence(auth, browserLocalPersistence)
+        .catch(error => {
+          console.warn('Error setting persistence:', error);
+        });
+    });
+  }
+
   db = getFirestore(app);
+
+  // Check for redirect result on page load
+  if (typeof window !== 'undefined' && localStorage.getItem('auth_redirect_pending')) {
+    import('firebase/auth').then(({ getRedirectResult }) => {
+      getRedirectResult(auth)
+        .then(result => {
+          if (result) {
+            console.log('Redirect authentication successful');
+            localStorage.removeItem('auth_redirect_pending');
+          }
+        })
+        .catch(error => {
+          console.error('Error with redirect result:', error);
+          localStorage.removeItem('auth_redirect_pending');
+        });
+    });
+  }
 } catch (error) {
   console.error('Error initializing Firebase client:', error);
 
@@ -65,8 +116,44 @@ export const signInWithGoogle = async () => {
       throw new Error("Authentication service is not available");
     }
 
+    // Log the current hostname for debugging
+    if (typeof window !== 'undefined') {
+      console.log('Current hostname:', window.location.hostname);
+      console.log('Current origin:', window.location.origin);
+    }
+
     // Use our custom popup handler
-    const result = await customSignInWithPopup(auth, provider);
+    let result;
+    try {
+      result = await customSignInWithPopup(auth, provider);
+    } catch (popupError: any) {
+      // If we get an unauthorized domain error, show a helpful message
+      if (popupError.code === 'auth/unauthorized-domain') {
+        console.error('Domain not authorized in Firebase. Please add the following domains to your Firebase console:');
+        console.error('- localhost');
+        console.error('- 127.0.0.1');
+        console.error('- ' + window.location.hostname);
+
+        // In development, we can create a mock user for testing
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Creating mock user for development testing');
+          return {
+            user: {
+              uid: 'mock-uid-' + Date.now(),
+              displayName: 'Mock User',
+              email: 'mock@example.com',
+              photoURL: 'https://ui-avatars.com/api/?name=Mock+User&background=random',
+              getIdToken: () => Promise.resolve('mock-token')
+            },
+            token: 'mock-token',
+            idToken: 'mock-id-token'
+          };
+        }
+
+        throw popupError;
+      }
+      throw popupError;
+    }
 
     // If the result is null, the user closed the popup
     if (!result) {

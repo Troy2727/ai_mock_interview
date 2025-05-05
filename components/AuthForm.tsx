@@ -16,6 +16,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "fire
 import { auth } from "@/firebass";
 import { signIn, signUp } from "@/lib/actions/auth.action";
 import Loading from "./Loading"
+import AuthErrorPage from "./AuthErrorPage"
 
 
 const AuthFormSchema = (type: FormType) => {return z.object ({
@@ -28,8 +29,9 @@ const AuthFormSchema = (type: FormType) => {return z.object ({
 const AuthForm = ({type}: {type: FormType}) => {
   const router = useRouter();
   const formSchema = AuthFormSchema(type);
-  // Add loading state
+  // Add loading and error states
   const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // 1. Define your form.
   const form = useForm<z.infer<typeof formSchema>>({
@@ -79,32 +81,46 @@ const AuthForm = ({type}: {type: FormType}) => {
       }
     } catch(error: any){
       console.log(error);
-      // Provide more specific error messages based on Firebase error codes
-      if (error.code === 'auth/invalid-credential') {
-        toast.error('Invalid email or password. Please check your credentials and try again.');
-      } else if (error.code === 'auth/user-not-found') {
-        toast.error('User not found. Please check your email or sign up for a new account.');
-      } else if (error.code === 'auth/wrong-password') {
-        toast.error('Incorrect password. Please try again.');
-      } else if (error.code === 'auth/email-already-in-use') {
-        toast.error('Email already in use. Please sign in instead.');
-      } else if (error.code === 'auth/weak-password') {
-        toast.error('Password is too weak. Please use a stronger password.');
-      } else {
-        toast.error(`Authentication error: ${error.message || error}`);
-      }
+
       // Set loading to false on error
       setIsLoading(false);
+
+      // Provide more specific error messages based on Firebase error codes
+      if (error.code === 'auth/invalid-credential') {
+        setAuthError('Invalid email or password. Please check your credentials and try again.');
+      } else if (error.code === 'auth/user-not-found') {
+        setAuthError('User not found. Please check your email or sign up for a new account.');
+      } else if (error.code === 'auth/wrong-password') {
+        setAuthError('Incorrect password. Please try again.');
+      } else if (error.code === 'auth/email-already-in-use') {
+        setAuthError('Email already in use. Please sign in instead.');
+      } else if (error.code === 'auth/weak-password') {
+        setAuthError('Password is too weak. Please use a stronger password.');
+      } else if (error.code === 'auth/unauthorized-domain') {
+        setAuthError('This domain is not authorized for authentication. Please contact support.');
+      } else {
+        setAuthError(`Authentication error: ${error.message || error}`);
+      }
     }
   }
 
   const isSignIn = type === 'sign-in';
 
+  // If there's an authentication error, show the error page
+  if (authError) {
+    return (
+      <AuthErrorPage
+        error={authError}
+        onRetry={() => setAuthError(null)}
+      />
+    );
+  }
+
   return (
     <div className="card-border min-w-[20%] relative">
       {/* Full screen loader overlay */}
       {isLoading && (
-            <div >{isSignIn ? <Loading /> : <Loading />}</div>
+            <div>{isSignIn ? <Loading /> : <Loading />}</div>
       )}
 
       <div className="flex flex-col gap-4 card py-8 px-10">
@@ -147,15 +163,33 @@ const AuthForm = ({type}: {type: FormType}) => {
           onClick={async () => {
             try {
               setIsLoading(true);
+
+              // Check if we're returning from a redirect
+              if (typeof window !== 'undefined' && localStorage.getItem('auth_redirect_pending')) {
+                // We're returning from a redirect, but the redirect handler in client.ts should handle it
+                // Just show a message and reset loading state
+                toast.info("Processing authentication...");
+                setIsLoading(false);
+                return;
+              }
+
               const { signInWithGoogle } = await import("@/firebass");
 
               // Call signInWithGoogle and handle the result
               const result = await signInWithGoogle();
 
-              // If result is null, the user likely closed the popup
+              // If result is null, it could be:
+              // 1. User closed the popup
+              // 2. We're using redirect auth and will be redirected
               if (!result) {
-                // Just silently end the loading state without showing any error
-                setIsLoading(false);
+                // Check if we're expecting a redirect
+                if (typeof window !== 'undefined' && localStorage.getItem('auth_redirect_pending')) {
+                  // We're about to be redirected, keep the loading state
+                  toast.info("Redirecting to Google authentication...");
+                } else {
+                  // User likely closed the popup
+                  setIsLoading(false);
+                }
                 return;
               }
 
@@ -186,11 +220,17 @@ const AuthForm = ({type}: {type: FormType}) => {
             } catch (err: any) {
               console.error("Google sign-in error:", err);
 
-              // Show the error message to the user
-              if (err.message) {
-                toast.error(err.message);
+              // Set the error message for the error page
+              if (err.code === 'auth/unauthorized-domain') {
+                setAuthError("This domain is not authorized for authentication. Please contact support.");
+              } else if (err.code === 'auth/popup-closed-by-user') {
+                // Just reset loading state without showing an error
+                setIsLoading(false);
+                return;
+              } else if (err.message) {
+                setAuthError(err.message);
               } else {
-                toast.error("An error occurred during sign-in. Please try again.");
+                setAuthError("An error occurred during sign-in. Please try again.");
               }
 
               setIsLoading(false);
@@ -208,6 +248,13 @@ const AuthForm = ({type}: {type: FormType}) => {
 
       <Link href={!isSignIn ? '/sign-in':'/sign-up'} className="font-bold text-user-primary ml-1">
       {!isSignIn ? "Sign in" : 'Sign up'}</Link>
+    </p>
+
+    {/* Add a link to the debug page */}
+    <p className="text-center mt-4 text-xs text-gray-500">
+      <Link href="/auth-debug" className="hover:underline">
+        Having trouble? Check auth status
+      </Link>
     </p>
     </div>
     </div>

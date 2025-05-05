@@ -3,6 +3,7 @@ import { Mona_Sans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import AuthRedirectWrapper from "@/components/AuthRedirectWrapper";
 
 const monaSans = Mona_Sans({
   variable: "--font-mona-sans",
@@ -30,6 +31,8 @@ export default function RootLayout({
         <ErrorBoundary>
           {children}
         </ErrorBoundary>
+        {/* Add the AuthRedirectWrapper to handle redirect authentication */}
+        <AuthRedirectWrapper />
         <Toaster />
       </body>
     </html>

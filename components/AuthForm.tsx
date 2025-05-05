@@ -197,8 +197,27 @@ const AuthForm = ({type}: {type: FormType}) => {
               const idToken = await result.user.getIdToken();
 
               try {
-                await signIn({ email: result.user.email!, idToken });
-                toast.success("Signed in with Google successfully!");
+                const signInResult = await signIn({ email: result.user.email!, idToken });
+
+                // Check if we're using a local session
+                if (signInResult?.success === false) {
+                  console.warn("Server-side sign-in failed:", signInResult.message);
+
+                  // Create a local session as fallback
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('auth_user', JSON.stringify({
+                      uid: result.user.uid,
+                      email: result.user.email,
+                      displayName: result.user.displayName,
+                      photoURL: result.user.photoURL,
+                      isLocalSession: true,
+                    }));
+
+                    toast.success("Signed in with Google (local session)");
+                  }
+                } else {
+                  toast.success("Signed in with Google successfully!");
+                }
               } catch (signInError) {
                 console.error("Error during server-side sign-in:", signInError);
 

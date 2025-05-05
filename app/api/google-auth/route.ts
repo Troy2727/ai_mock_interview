@@ -7,16 +7,27 @@ export async function POST(req: NextRequest) {
   try {
     // Log the request for debugging
     console.log("Google Auth API called");
+    console.log("Environment:", process.env.NODE_ENV);
+    console.log("Vercel environment:", process.env.VERCEL_ENV);
 
     // Parse the request body
-    const body = await req.json();
-    console.log("Request body received:", JSON.stringify({
-      uid: body.uid,
-      name: body.name,
-      email: body.email,
-      idToken: body.idToken ? "present" : "missing",
-      photoURL: body.photoURL ? "present" : "missing"
-    }));
+    let body;
+    try {
+      body = await req.json();
+      console.log("Request body received:", JSON.stringify({
+        uid: body.uid,
+        name: body.name,
+        email: body.email,
+        idToken: body.idToken ? "present" : "missing",
+        photoURL: body.photoURL ? "present" : "missing"
+      }));
+    } catch (parseError) {
+      console.error("Error parsing request body:", parseError);
+      return NextResponse.json({
+        success: false,
+        message: "Invalid request body"
+      }, { status: 400 });
+    }
 
     const { uid, name, email, idToken, photoURL } = body;
 
@@ -64,11 +75,25 @@ export async function POST(req: NextRequest) {
     } catch (cookieError) {
       console.error("Error setting session cookie:", cookieError);
 
-      // In development, we can continue without a valid session cookie
-      if (process.env.NODE_ENV !== 'production') {
-        console.log("Development environment detected, continuing without valid session cookie");
+      // In development or Vercel preview, we can continue without a valid session cookie
+      // This allows testing without proper Firebase Admin setup
+      if (process.env.NODE_ENV !== 'production' || process.env.VERCEL_ENV === 'preview') {
+        console.log("Development or preview environment detected, continuing with local session");
+
+        // Return success but indicate we're using a local session
+        return NextResponse.json({
+          success: true,
+          message: "User signed in with local session.",
+          useLocalSession: true
+        });
       } else {
-        throw cookieError;
+        // In production, log the error but don't throw it
+        // Instead, return a more helpful error message
+        return NextResponse.json({
+          success: false,
+          message: "Error setting session cookie",
+          error: cookieError instanceof Error ? cookieError.message : "Unknown error"
+        }, { status: 500 });
       }
     }
 
@@ -80,6 +105,13 @@ export async function POST(req: NextRequest) {
     const errorMessage = error instanceof Error
       ? error.message
       : "Unknown error occurred";
+
+    // Log additional context for debugging
+    console.error("Error context:", {
+      environment: process.env.NODE_ENV,
+      vercelEnv: process.env.VERCEL_ENV,
+      errorType: error instanceof Error ? error.constructor.name : typeof error
+    });
 
     return NextResponse.json({
       success: false,

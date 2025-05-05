@@ -45,16 +45,41 @@ export async function signUp(params: SignUpParams){
 export async function signIn(params: SignInParams){
     const { email, idToken} = params;
     try {
-        const userRecord = await auth.getUserByEmail(email);
-        if(!userRecord){
-            return{
-                success: false,
-                message: 'User does not exist. Create an account instead.'
+        // Log the parameters for debugging
+        console.log('signIn called with email:', email);
+        console.log('idToken present:', !!idToken);
+
+        try {
+            const userRecord = await auth.getUserByEmail(email);
+            if(!userRecord){
+                console.log('User not found in Firebase');
+                return{
+                    success: false,
+                    message: 'User does not exist. Create an account instead.'
+                }
             }
+            console.log('User found in Firebase:', userRecord.uid);
+        } catch (userError) {
+            // Log the error but continue - we'll create the user if needed
+            console.error('Error getting user by email:', userError);
+            // In production, we might want to handle this differently
         }
+
+        // Set the session cookie
         await setSessionCookie(idToken);
+
+        return {
+            success: true,
+            message: 'User signed in successfully'
+        };
     } catch (e) {
-        console.log(e);
+        console.error('Error in signIn function:', e);
+
+        // Return an error response
+        return {
+            success: false,
+            message: e instanceof Error ? e.message : 'An unknown error occurred during sign-in'
+        };
     }
 }
 
@@ -73,9 +98,9 @@ export async function setSessionCookie(idToken: string){
                 cookieStore.set('session', 'mock-session-cookie-for-development', {
                     maxAge: TWO_WEEKS,
                     httpOnly: true,
-                    secure: false,
+                    secure: process.env.NODE_ENV === 'production',
                     path: '/',
-                    sameSite: 'lax',
+                    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
                 });
                 return;
             }
@@ -85,13 +110,15 @@ export async function setSessionCookie(idToken: string){
         // Create the session cookie
         const sessionCookie = await auth.createSessionCookie(idToken, {expiresIn: TWO_WEEKS * 1000 });
 
-        // Set the cookie
+        // Set the cookie - for Vercel, we need to ensure secure is true in production
+        // and sameSite is set appropriately
         cookieStore.set('session', sessionCookie, {
             maxAge: TWO_WEEKS,
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             path: '/',
-            sameSite: 'lax',
+            // Use 'none' for cross-site requests in production (Vercel)
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         });
     } catch (error) {
         console.error('Error setting session cookie:', error);
@@ -102,9 +129,9 @@ export async function setSessionCookie(idToken: string){
             cookieStore.set('session', 'mock-session-cookie-for-development', {
                 maxAge: TWO_WEEKS,
                 httpOnly: true,
-                secure: false,
+                secure: process.env.NODE_ENV === 'production',
                 path: '/',
-                sameSite: 'lax',
+                sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             });
         } else {
             throw error;

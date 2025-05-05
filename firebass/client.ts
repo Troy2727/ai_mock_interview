@@ -194,13 +194,20 @@ export const signInWithGoogle = async () => {
         }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.warn("Server session creation failed:", errorText);
+      // Parse the response
+      const responseData = await response.json().catch(e => {
+        console.error("Error parsing response:", e);
+        return null;
+      });
 
-        // If we're in production and the server returns a 500 error,
-        // we'll create a local session instead
-        if (response.status === 500) {
+      console.log("API response:", response.status, responseData);
+
+      if (!response.ok) {
+        console.warn("Server session creation failed:", responseData?.message || "Unknown error");
+
+        // If the server returns a 500 error or we're instructed to use a local session,
+        // create a local session instead
+        if (response.status === 500 || responseData?.useLocalSession) {
           console.log("Creating local session as fallback for server error");
 
           // Store the user info in localStorage as a fallback
@@ -217,6 +224,23 @@ export const signInWithGoogle = async () => {
           } catch (localStorageError) {
             console.error("Error creating local session:", localStorageError);
           }
+        }
+      } else if (responseData?.useLocalSession) {
+        // The server explicitly told us to use a local session
+        console.log("Server instructed to use local session");
+
+        try {
+          localStorage.setItem('auth_user', JSON.stringify({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            isLocalSession: true,
+          }));
+
+          console.log("Local session created successfully");
+        } catch (localStorageError) {
+          console.error("Error creating local session:", localStorageError);
         }
       }
     } catch (serverError) {

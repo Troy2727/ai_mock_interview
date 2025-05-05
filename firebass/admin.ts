@@ -4,8 +4,18 @@ import { getFirestore } from "firebase-admin/firestore";
 
 // Check if we're running in a CI environment or Vercel build environment
 const isCI = process.env.CI === 'true';
-const isVercelBuild = process.env.VERCEL_ENV === 'production' || process.env.VERCEL_ENV === 'preview';
+// We only want to use mocks during the build phase, not during runtime
+const isVercelBuild = process.env.VERCEL_ENV === 'production' && process.env.VERCEL_REGION === undefined;
 const shouldUseMocks = isCI || isVercelBuild;
+
+console.log('Environment check:', {
+  isCI,
+  isVercelBuild,
+  shouldUseMocks,
+  NODE_ENV: process.env.NODE_ENV,
+  VERCEL_ENV: process.env.VERCEL_ENV,
+  VERCEL_REGION: process.env.VERCEL_REGION
+});
 
 // Mock implementations for CI environment
 class MockFirestore {
@@ -46,9 +56,22 @@ class MockFirestore {
 
 class MockAuth {
   verifyIdToken() {
-    return Promise.resolve({ uid: 'mock-user-id' });
+    return Promise.resolve({ uid: 'mock-user-id', email: 'mock@example.com' });
   }
+
   getUser() {
+    return Promise.resolve({ uid: 'mock-user-id', email: 'mock@example.com' });
+  }
+
+  getUserByEmail() {
+    return Promise.resolve({ uid: 'mock-user-id', email: 'mock@example.com' });
+  }
+
+  createSessionCookie() {
+    return Promise.resolve('mock-session-cookie');
+  }
+
+  verifySessionCookie() {
     return Promise.resolve({ uid: 'mock-user-id', email: 'mock@example.com' });
   }
 }

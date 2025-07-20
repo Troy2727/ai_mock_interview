@@ -98,7 +98,7 @@ export default function VapiDomainCheckPage() {
         <h2 className="text-xl font-semibold mb-2 text-yellow-400">How to Fix Domain Authorization Issues</h2>
         <ol className="list-decimal pl-6 space-y-2">
           <li>Log in to your Vapi dashboard</li>
-            <li>Go to Settings > Domains</li> 
+          <li>Go to Settings > Domains</li>
           <li>Add your domain: <code>{currentDomain}</code></li>
           <li>Save your changes</li>
           <li>Wait a few minutes for the changes to propagate</li>
